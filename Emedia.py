@@ -3,18 +3,11 @@ import numpy as np
 from PIL import Image
 from PIL.ExifTags import TAGS
 import matplotlib.pyplot as plt
-from skimage.metrics import structural_similarity as ssim
-from skimage.metrics import mean_squared_error
 import matplotlib.image as mpimg
-import exifread
 import zlib
 
 
-# image = Image.open(r"C:\Users\PRO\Downloads\spermik.png")
-# image = Image.open(r"C:\Users\PRO\Downloads\drag.png")
-# image = Image.open(r"C:\Users\PRO\Downloads\spermik.png")
 
-imagename = r"C:\Users\PRO\Downloads\spermik.png"
 
 
 def read_png_header(file_path):
@@ -83,9 +76,6 @@ def read_png_metadata(file_path):
                 chunk_data = file.read(chunk_length)
 
 
-                crc = file.read(4)
-
-
                 if chunk_type == b'tEXt':
                     keyword, value = chunk_data.split(b'\x00', 1)
                     metadata[keyword.decode()] = value.decode()
@@ -145,7 +135,7 @@ def furier_trans_png(file_path):
 
 
 if __name__ == "__main__":
-    file_path = r"C:\Users\PRO\Desktop\Programy-Projekty\Python\pngs\spermik.png"  # Ścieżka do pliku PNG
+    file_path = r"C:\Users\Jakub\Desktop\EMEDIA\png\spermik.png"  # Ścieżka do pliku PNG
    # file_path = r"C:\Users\PRO\Desktop\Programy-Projekty\Python\pngs\Sigma.png"
     #file_path = r"C:\Users\PRO\Desktop\Programy-Projekty\Python\pngs\poli.png"
    # read_png_header(file_path)
