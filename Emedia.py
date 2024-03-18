@@ -83,7 +83,7 @@ def read_png_metadata(file_path):
                 chunk_data = file.read(chunk_length)
 
 
-                crc = file.read(4)
+
 
 
                 if chunk_type == b'tEXt':
