@@ -76,6 +76,9 @@ def read_png_metadata(file_path):
                 chunk_data = file.read(chunk_length)
 
 
+                crc = file.read(4)
+
+
                 if chunk_type == b'tEXt':
                     keyword, value = chunk_data.split(b'\x00', 1)
                     metadata[keyword.decode()] = value.decode()
