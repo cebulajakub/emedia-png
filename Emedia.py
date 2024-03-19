@@ -251,6 +251,21 @@ def low_pass_filter(img_gray,cutoff_freq,spectrum):
     # odwrotna
     filtered_img = np.fft.ifft2(np.fft.ifftshift(filtered_spectrum)).real
     return filtered_img
+
+
+def reconstruct_image(magnitude, phase):
+    # zespolona
+    spectrum_complex = magnitude * np.exp(1j * phase)
+
+    # Odwrócenie
+    inverse_spectrum = np.fft.ifft2(np.fft.ifftshift(spectrum_complex)).real
+
+
+
+    # Przeskalowanie  pikseli [0, 255]
+    inverse_spectrum *= 255
+
+    return inverse_spectrum.astype(np.uint8)
 def furier_trans_pngg(file_path, cutoff_freq):
     # Wczytaj obraz
     img = plt.imread(file_path)
@@ -265,6 +280,9 @@ def furier_trans_pngg(file_path, cutoff_freq):
     spectrum = np.fft.fftshift(np.fft.fft2(img_normalized))
 
     low_pass = low_pass_filter(img_gray, cutoff_freq, spectrum)
+    amplitude = np.abs(spectrum) + 1e-10
+    phase = np.angle(spectrum)
+    recovery = reconstruct_image(amplitude, phase)
 
     # Wyświetl obraz przefiltrowany
     plt.figure(figsize=(12, 12))
@@ -294,6 +312,10 @@ def furier_trans_pngg(file_path, cutoff_freq):
     plt.subplot(3, 2, 5)
     plt.imshow(low_pass, cmap='gray')
     plt.title('Low pass Filtering')
+
+    plt.subplot(3, 2, 6)
+    plt.imshow(recovery)
+    plt.title('Recovery')
 
     plt.show()
 
