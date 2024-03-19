@@ -39,16 +39,10 @@ def read_png_header(file_path):
                 print(f"Szerokość: {width}, Wysokość: {height}, Bitdepht: {bit_depht}")
                 print(f" color_type: {color_type}, Compressiom_method: {Compressiom_method}")
                 print(f"Filter_method: {Filter_method}, Interlace_method: {Interlace_method}")
-
-
-
-            elif chunk_type == b'sRGB':
-                data = file.read(chunk_length)
-                rendering_intent = data[0]
-                print(f"Rendering intent: {rendering_intent}")
-
-            elif chunk_type == b'IEND':
                 break
+
+
+
 
 
 def read_png_metadata(file_path):
@@ -76,16 +70,100 @@ def read_png_metadata(file_path):
                 chunk_data = file.read(chunk_length)
 
 
+                crc = file.read(4)
 
 
                 if chunk_type == b'tEXt':
                     keyword, value = chunk_data.split(b'\x00', 1)
                     metadata[keyword.decode()] = value.decode()
                 elif chunk_type == b'zTXt':
-                    # Rozpakuj skompresowane dane
+                    # Decompress compressed data
                     keyword, comp_data = chunk_data.split(b'\x00', 1)
                     value = zlib.decompress(comp_data)
                     metadata[keyword.decode()] = value.decode()
+                elif chunk_type == b'cHRM':
+                    white_point_x = int.from_bytes(chunk_data[0:4], byteorder='big') / 100000
+                    white_point_y = int.from_bytes(chunk_data[4:8], byteorder='big') / 100000
+                    red_x = int.from_bytes(chunk_data[8:12], byteorder='big') / 100000
+                    red_y = int.from_bytes(chunk_data[12:16], byteorder='big') / 100000
+                    green_x = int.from_bytes(chunk_data[16:20], byteorder='big') / 100000
+                    green_y = int.from_bytes(chunk_data[20:24], byteorder='big') / 100000
+                    blue_x = int.from_bytes(chunk_data[24:28], byteorder='big') / 100000
+                    blue_y = int.from_bytes(chunk_data[28:32], byteorder='big') / 100000
+
+                    chromaticity_data = {
+                        'white_point': (white_point_x, white_point_y),
+                        'red': (red_x, red_y),
+                        'green': (green_x, green_y),
+                        'blue': (blue_x, blue_y)
+                    }
+
+                    metadata['cHRM'] = chromaticity_data
+                elif chunk_type == b'bKGD':
+                    if len(chunk_data) == 1:  # Gray level background
+                        gray_level = int.from_bytes(chunk_data, byteorder='big')
+                        metadata['bKGD'] = {'gray_level': gray_level}
+                    elif len(chunk_data) == 6:  # RGB background
+                        red = int.from_bytes(chunk_data[0:2], byteorder='big')
+                        green = int.from_bytes(chunk_data[2:4], byteorder='big')
+                        blue = int.from_bytes(chunk_data[4:6], byteorder='big')
+                        metadata['bKGD'] = {'red': red, 'green': green, 'blue': blue}
+                elif chunk_type == b'pHYs':
+                    pixels_per_unit_x = int.from_bytes(chunk_data[0:4], byteorder='big')
+                    pixels_per_unit_y = int.from_bytes(chunk_data[4:8], byteorder='big')
+                    unit_specifier = int.from_bytes(chunk_data[8:9], byteorder='big')
+                    metadata['pHYs'] = {'pixels_per_unit_x': pixels_per_unit_x, 'pixels_per_unit_y': pixels_per_unit_y, 'unit_specifier': unit_specifier}
+                elif chunk_type == b'sRGB':
+                    rendering_intent = int.from_bytes(chunk_data, byteorder='big')
+                    metadata['sRGB'] = rendering_intent
+                elif chunk_type == b'PLTE':
+                    palette = int.from_bytes(chunk_data, byteorder='big')
+                    metadata['PLTE'] = palette
+                elif chunk_type == b'gAMA':
+                    gamma_value = int.from_bytes(chunk_data, byteorder='big') / 100000
+                    metadata['gAMA'] = gamma_value
+                elif chunk_type == b'tIME':
+                    year = int.from_bytes(chunk_data[0:2], byteorder='big')
+                    month = int.from_bytes(chunk_data[2:3], byteorder='big')
+                    day = int.from_bytes(chunk_data[3:4], byteorder='big')
+                    hour = int.from_bytes(chunk_data[4:5], byteorder='big')
+                    minute = int.from_bytes(chunk_data[5:6], byteorder='big')
+                    second = int.from_bytes(chunk_data[6:7], byteorder='big')
+                    metadata['tIME'] = {'year': year, 'month': month, 'day': day, 'hour': hour, 'minute': minute, 'second': second}
+                elif chunk_type == b'tRNS':
+                    if b'PLTE' in metadata:
+                        palette_size = len(metadata[b'PLTE'])
+                        if palette_size > 0:
+                            if palette_size == 2:  # Grayscale with alpha
+                                alpha = int.from_bytes(chunk_data, byteorder='big')
+                                metadata['tRNS'] = {'gray_alpha': alpha}
+                            elif palette_size == 6:  # RGB with alpha
+                                red_alpha = int.from_bytes(chunk_data[0:2], byteorder='big')
+                                green_alpha = int.from_bytes(chunk_data[2:4], byteorder='big')
+                                blue_alpha = int.from_bytes(chunk_data[4:6], byteorder='big')
+                                metadata['tRNS'] = {'red_alpha': red_alpha, 'green_alpha': green_alpha, 'blue_alpha': blue_alpha}
+                elif chunk_type == b'sBIT':
+                    if b'PLTE' in metadata:
+                        palette_size = len(metadata[b'PLTE'])
+                        if palette_size > 0:
+                            if palette_size == 1:  # Grayscale
+                                gray_bits = int.from_bytes(chunk_data, byteorder='big')
+                                metadata['sBIT'] = {'gray_bits': gray_bits}
+                            elif palette_size == 3:  # RGB
+                                red_bits = int.from_bytes(chunk_data[0:1], byteorder='big')
+                                green_bits = int.from_bytes(chunk_data[1:2], byteorder='big')
+                                blue_bits = int.from_bytes(chunk_data[2:3], byteorder='big')
+                                metadata['sBIT'] = {'red_bits': red_bits, 'green_bits': green_bits, 'blue_bits': blue_bits}
+                elif chunk_type == b'hIST':
+                    histogram = [int.from_bytes(chunk_data[i:i+2], byteorder='big') for i in range(0, len(chunk_data), 2)]
+                    metadata['hIST'] = histogram
+                elif chunk_type == b'sPLT':
+                    palette_name, sample_depth, entries = chunk_data.split(b'\x00', 2)
+                    palette_name = palette_name.decode()
+                    sample_depth = int.from_bytes(sample_depth, byteorder='big')
+                    entries = [entries[i:i+sample_depth+1] for i in range(0, len(entries), sample_depth+1)]
+                    palette = [(entry[0:sample_depth].decode(), int.from_bytes(entry[sample_depth:], byteorder='big')) for entry in entries]
+                    metadata['sPLT'] = {'palette_name': palette_name, 'sample_depth': sample_depth, 'palette': palette}
 
     except Exception as e:
         print("Błąd podczas odczytywania metadanych PNG:", e)
@@ -137,10 +215,10 @@ def furier_trans_png(file_path):
 
 
 if __name__ == "__main__":
-    file_path = r"C:\Users\Jakub\Desktop\EMEDIA\png\spermik.png"  # Ścieżka do pliku PNG
+    file_path = r"C:\Users\Jakub\Desktop\EMEDIA\png\moon.png"  # Ścieżka do pliku PNG
    # file_path = r"C:\Users\PRO\Desktop\Programy-Projekty\Python\pngs\Sigma.png"
     #file_path = r"C:\Users\PRO\Desktop\Programy-Projekty\Python\pngs\poli.png"
-   # read_png_header(file_path)
+    read_png_header(file_path)
    # show_png(file_path)
     #furier_trans_png(file_path)
     #equals(file_path)
