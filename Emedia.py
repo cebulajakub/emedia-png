@@ -184,6 +184,7 @@ def plot_edges(gray_img_normalized):
     edges_y = ndimage.convolve(gray_img_normalized, sobel_y)
     edges = np.sqrt(edges_x**2 + edges_y**2)
 
+    return edges
 def show_png(file_path):
     im = Image.open(file_path)
     im.show()
@@ -204,21 +205,35 @@ def furier_trans_png(file_path):
     spectrum = np.fft.fftshift(np.fft.fft2(img_normalized))
 
     # Wyświetl widmo
-    plt.figure(figsize=(12, 6))
+    plt.figure(figsize=(12, 12))
 
-    plt.subplot(131)
+    plt.subplot(3, 2, 1)
     plt.imshow(img, cmap='gray')
     plt.title('Color Image')
 
-    plt.subplot(132)
+    plt.subplot(3, 2, 2)
     plt.imshow(img_gray, cmap='gray')
     plt.title('Grayscale Image')
 
-    plt.subplot(133)
+    plt.subplot(3, 2, 3)
     spectrum_log = np.abs(spectrum) + 1e-10
     plt.imshow(np.log(spectrum_log), cmap='gray')#gray
     plt.title('Fourier Transform Spectrum')
     plt.colorbar()
+
+    plt.subplot(3, 2, 4)
+    edges = plot_edges(img_normalized)
+    plt.imshow(edges, cmap='gray')
+    plt.title('Edges')
+    plt.colorbar()
+
+    plt.subplot(3, 2, 5)
+    spectrum_phase = np.angle(spectrum)
+    plt.imshow(spectrum_phase, cmap='gray')
+    plt.title('Fourier Transform Spectrum (Phase)')
+    plt.colorbar()
+
+
 
     plt.show()
 
@@ -227,12 +242,12 @@ def furier_trans_png(file_path):
 
 
 if __name__ == "__main__":
-    file_path = r"C:\Users\Jakub\Desktop\EMEDIA\png\moon.png"  # Ścieżka do pliku PNG
-   # file_path = r"C:\Users\PRO\Desktop\Programy-Projekty\Python\pngs\Sigma.png"
+   # file_path = r"C:\Users\Jakub\Desktop\EMEDIA\png\moon.png"  # Ścieżka do pliku PNG
+    file_path = r"C:\Users\PRO\Desktop\Programy-Projekty\Python\pngs\spermik.png    "
     #file_path = r"C:\Users\PRO\Desktop\Programy-Projekty\Python\pngs\poli.png"
-    read_png_header(file_path)
+    #read_png_header(file_path)
    # show_png(file_path)
-    #furier_trans_png(file_path)
+    furier_trans_png(file_path)
     #equals(file_path)
     metadata = read_png_metadata(file_path)
     if metadata:
