@@ -230,7 +230,7 @@ def furier_trans_png(file_path):
     plt.subplot(3, 2, 5)
     spectrum_phase = np.angle(spectrum)
     plt.imshow(spectrum_phase, cmap='gray')
-    plt.title('Fourier Transform Spectrum (Phase)')
+    plt.title('Fourier Transform Spectrum (Phases)')
     plt.colorbar()
 
 
