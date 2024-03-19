@@ -5,6 +5,7 @@ from PIL.ExifTags import TAGS
 import matplotlib.pyplot as plt
 import matplotlib.image as mpimg
 import zlib
+from scipy import ndimage
 
 
 
@@ -170,7 +171,18 @@ def read_png_metadata(file_path):
 
     return metadata
 
-
+def plot_edges(gray_img_normalized):
+    sobel_x = np.array([[1, 0, -1],
+                        [2, 0, -2],
+                        [1, 0, -1]])
+    
+    sobel_y = np.array([[1, 2, 1],
+                        [0, 0, 0],
+                        [-1, -2, -1]])
+    
+    edges_x = ndimage.convolve(gray_img_normalized, sobel_x)
+    edges_y = ndimage.convolve(gray_img_normalized, sobel_y)
+    edges = np.sqrt(edges_x**2 + edges_y**2)
 
 def show_png(file_path):
     im = Image.open(file_path)
