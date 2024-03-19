@@ -314,7 +314,7 @@ def furier_trans_pngg(file_path, cutoff_freq):
     plt.title('Low pass Filtering')
 
     plt.subplot(3, 2, 6)
-    plt.imshow(recovery)
+    plt.imshow(recovery,cmap='inferno')
     plt.title('Recovery')
 
     plt.show()
