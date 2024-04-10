@@ -8,9 +8,9 @@ from  fourier import furier_trans_pngg
 
 
 if __name__ == "__main__":
-    file_path = r"C:\Users\Jakub\Desktop\EMEDIA\emedia-png\pngs\spermik.png"  # Ścieżka do pliku PNG
+   #file_path = r"C:\Users\Jakub\Desktop\EMEDIA\emedia-png\pngs\spermik.png"  # Ścieżka do pliku PNG
     #file_path = r"C:\Users\PRO\Desktop\Programy-Projekty\Python\pngs\spermik.png"
-    #file_path = r"C:\Users\PRO\Desktop\Programy-Projekty\Python\pngs\poli.png"
+    file_path = r"C:\Users\PRO\Desktop\Programy-Projekty\Python\pngs\moon.png"
     #read_png_header(file_path)
     #show_png(file_path)
     #furier_trans_png(file_path)
