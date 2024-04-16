@@ -157,3 +157,39 @@ def read_png_metadata(file_path):
         print("Błąd podczas odczytywania metadanych PNG:", e)
 
     return metadata
+
+def create_minimal_png_copy(input_file_path, output_file_path):
+    try:
+        with open(input_file_path, 'rb') as input_file, open(output_file_path, 'wb') as output_file:
+            # Kopiuj nagłówek
+            output_file.write(input_file.read(8))
+
+            while True:
+                # Odczytaj długość następnego chunka
+                length_bytes = input_file.read(4)
+                if not length_bytes:  # Koniec pliku
+                    break
+                chunk_length = int.from_bytes(length_bytes, byteorder='big')
+
+                # Odczytaj typ chunka
+                chunk_type = input_file.read(4)
+                if not chunk_type:  # Koniec pliku
+                    break
+
+                # Odczytaj dane chunka
+                chunk_data = input_file.read(chunk_length)
+
+                # Odczytaj CRC
+                crc = input_file.read(4)
+
+                # Jeśli chunk jest jednym z wymaganych, skopiuj go
+                if chunk_type in [b'IHDR', b'IDAT', b'IEND', b'PLTE']:
+                    output_file.write(length_bytes)
+                    output_file.write(chunk_type)
+                    output_file.write(chunk_data)
+                    output_file.write(crc)
+
+    except Exception as e:
+        print("Błąd podczas tworzenia minimalnej kopii pliku PNG:", e)
+
+
