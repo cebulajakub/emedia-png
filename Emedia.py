@@ -7,13 +7,13 @@ from fourier import furier_trans_pngg
 
 if __name__ == "__main__":
     #file_path = r"C:\Users\Jakub\Desktop\EMEDIA\emedia-png\pngs\spermik.png"  # Ścieżka do pliku PNG
-    file_path = r"C:\Users\PRO\Desktop\Programy-Projekty\Python\pngs\vwboot.png"
+   # file_path = r"C:\Users\PRO\Desktop\Programy-Projekty\Python\pngs\spermik.png"
    # file_path = r"C:\Users\PRO\PycharmProjects\emedia-png\pngs\ball.png"
-    #file_path = r"C:\Users\PRO\PycharmProjects\emedia-png\pngs\gull.png"
+    file_path = r"C:\Users\PRO\PycharmProjects\emedia-png\pngs\spermik.png"
     file_path_copy = r"C:\Users\PRO\PycharmProjects\emedia-png\pngs\copy.png"
     input_file_path = file_path
     output_file_path = file_path_copy
-    #create_minimal_png_copy(input_file_path, output_file_path)
+    create_minimal_png_copy(input_file_path, output_file_path)
     read_png_header(file_path_copy)
     #show_png(file_path)
    # furier_trans_png(file_path)
