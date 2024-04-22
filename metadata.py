@@ -70,7 +70,6 @@ def read_png_metadata(file_path, sciezka_xml=None):
                             element.text =value.decode()
                             drzewo = ET.ElementTree(korzen)
                             drzewo.write(sciezka_xml)
-
                 elif chunk_type == b'tEXt':
                     keyword, value = chunk_data.split(b'\x00', 1)
                     metadata[keyword.decode()] = value.decode()
