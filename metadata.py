@@ -73,7 +73,7 @@ def read_png_metadata(file_path, sciezka_xml=None):
                 elif chunk_type == b'tEXt':
                     keyword, value = chunk_data.split(b'\x00', 1)
                     metadata[keyword.decode()] = value.decode()
-                if chunk_type == b'zTXt':
+                elif chunk_type == b'zTXt':
                      #Decompress compressed data
                     keyword, comp_data = chunk_data.split(b'\x00', 1)
                     value = zlib.decompress(comp_data)
