@@ -7,7 +7,7 @@ from fourier import furier_trans_pngg
 
 if __name__ == "__main__":
     file_path = r"C:\Users\Jakub\Desktop\EMEDIA\emedia-png\pngs\itxt.png" # Ścieżka do pliku PNG
-    file_path_xml = r"C:\Users\Jakub\Desktop\EMEDIA\emedia-png\pngs\metadae.xml"
+    file_path_xml = r"C:\Users\Jakub\Desktop\EMEDIA\emedia-png\pngs\metadane.xml"
     #file_path = r"C:\Users\PRO\Desktop\Programy-Projekty\Python\pngs\vwboot.png"
    #file_path = r"C:\Users\PRO\PycharmProjects\emedia-png\pngs\ball.png"
     #file_path = r"C:\Users\PRO\PycharmProjects\emedia-png\pngs\gull.png"

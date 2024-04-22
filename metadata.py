@@ -60,24 +60,63 @@ def read_png_metadata(file_path, sciezka_xml=None):
 
 
                 crc = file.read(4)
-
+                all_iTXT_metadata = {}
+                
+                
                 if chunk_type == b'iTXt':
-                    keyword, value = chunk_data.split(b'\x00', 1)
-                    metadata[keyword.decode()] = value.decode()
-                    if sciezka_xml:  # Tworzenie pliku XML tylko dla chunku iTXt
-                            korzen = ET.Element("metadane")
-                            element = ET.SubElement(korzen, keyword.decode())
-                            element.text =value.decode()
-                            drzewo = ET.ElementTree(korzen)
-                            drzewo.write(sciezka_xml)
+                    keyword, rest = chunk_data.split(b'\x00', 1)
+                    compression_flag, rest = rest.split(b'\x00', 1)
+                    language_tag, rest = rest.split(b'\x00', 1)
+                    translated_keyword, text_data = rest.split(b'\x00', 1)
+
+                    
+                    keyword = keyword.decode()
+                    compression_flag = int.from_bytes(compression_flag, byteorder='big')
+                    language_tag = language_tag.decode()
+                    translated_keyword = translated_keyword.decode()
+
+                    # Sprawdzenie, czy dane tekstowe są skompresowane
+                    if compression_flag == 1:
+                        try:
+                            # Dekompresja danych tekstowych
+                            text_data = zlib.decompress(text_data)
+                        except zlib.error as e:
+                            print("Błąd podczas dekompresji danych algorytmem zlib:", e)
+                            return
+
+                    # Dekodowanie danych tekstowych
+                    text = text_data.decode()
+
+                    # Dodanie metadanych do słownika
+                    metadata[keyword] = text
+
+                    # Zapis do pliku XML
+                    if sciezka_xml:
+                        korzen = ET.Element("metadane")
+                        element = ET.SubElement(korzen, keyword)
+                        element.text = text
+                        drzewo = ET.ElementTree(korzen)
+                        drzewo.write(sciezka_xml)
                 elif chunk_type == b'tEXt':
                     keyword, value = chunk_data.split(b'\x00', 1)
                     metadata[keyword.decode()] = value.decode()
-                if chunk_type == b'zTXt':
-                     #Decompress compressed data
-                    keyword, comp_data = chunk_data.split(b'\x00', 1)
-                    value = zlib.decompress(comp_data)
-                    metadata[keyword.decode()] = value.decode()
+                elif chunk_type == b'zTXt':
+                                    # Rozdziel klucz i dane skompresowane
+                                    keyword, comp_data = chunk_data.split(b'\x00', 1)
+
+                                    # Sprawdź, czy dane są skompresowane
+                                    compression = comp_data.split(b'\x00', 1)
+                                    if compression[0] == b'\x00':
+                                        # Dane nie są skompresowane
+                                        value = compression[1]  # Pomijamy bajt określający metodę kompresji
+                                        metadata[keyword.decode()] = value.decode('latin-1')
+                                    else:
+                                        # Dane są skompresowane, użyj odpowiedniej metody dekompresji
+                                        try:
+                                            value = zlib.decompress(compression[1])
+                                            metadata[keyword.decode()] = value.decode('latin-1')
+                                        except zlib.error as e:
+                                            print("Błąd podczas dekompresji danych:", e)
                 elif chunk_type == b'cHRM':
                     white_point_x = int.from_bytes(chunk_data[0:4], byteorder='big') / 100000
                     white_point_y = int.from_bytes(chunk_data[4:8], byteorder='big') / 100000
