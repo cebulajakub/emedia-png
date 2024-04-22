@@ -204,4 +204,5 @@ def furier_trans_pngg(file_path, cutoff_freq):
     plt.imshow(np.log(spectrum_log_shifted), cmap='gray')  # Wyświetlenie przesuniętego widma
     plt.title('Fourier Transform Spectrum (Shifted)')
     plt.colorbar()
+    #
     plt.show()
