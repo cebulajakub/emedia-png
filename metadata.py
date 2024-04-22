@@ -1,4 +1,6 @@
+import io
 import zlib
+import gzip
 import xml.etree.ElementTree as ET
 
 def read_png_header(file_path):
@@ -62,22 +64,72 @@ def read_png_metadata(file_path, sciezka_xml=None):
                 crc = file.read(4)
 
                 if chunk_type == b'iTXt':
-                    keyword, value = chunk_data.split(b'\x00', 1)
-                    metadata[keyword.decode()] = value.decode()
-                    if sciezka_xml:  # Tworzenie pliku XML tylko dla chunku iTXt
+
+                        keyword, value = chunk_data.split(b'\x00', 1)
+                        keyword_decoded = keyword.decode('latin-1')  # Dekodowanie klucza jako Latin-1
+                        compression_flag = value[0]  # Pierwszy bajt to flaga kompresji
+                        print(f"Compression_flag: {value}")
+                        if compression_flag == 0:
+                            # Dane nie są skompresowane
+                            print("aaaaa")
+                            value_decoded = value.decode('latin-1')
+
+                        elif compression_flag == 1:
+                            try:
+
+                                decompressed_value = zlib.decompress(value)
+                                value_decoded = decompressed_value.decode('latin-1')
+                            except zlib.error as e:
+                                print("Błąd podczas dekompresji danych:", e)
+
+
+
+
+                        # Sprawdź, czy dane zawierają klucz "translated keyword"
+                        if b'\x00' in value:
+                            print("bbb")
+                            translated_keyword, data = value.split(b'\x00', 1)
+                            translated_keyword_decoded = translated_keyword.decode(
+                                'latin-1')  # Dekodowanie klucza jako Latin-1
+                        else:
+
+                            translated_keyword_decoded = None
+
+                        metadata[keyword_decoded] = value_decoded
+
+                        # Utwórz plik XML z danymi iTXt
+                        if sciezka_xml:
                             korzen = ET.Element("metadane")
-                            element = ET.SubElement(korzen, keyword.decode())
-                            element.text =value.decode()
+                            if translated_keyword_decoded:
+                                # Jeśli klucz "translated keyword" istnieje, dodaj go do XML
+                                element_translated = ET.SubElement(korzen, "translated_keyword")
+                                element_translated.text = translated_keyword_decoded
+                            element = ET.SubElement(korzen, keyword_decoded)
+                            element.text = value_decoded
                             drzewo = ET.ElementTree(korzen)
                             drzewo.write(sciezka_xml)
+
+
                 elif chunk_type == b'tEXt':
                     keyword, value = chunk_data.split(b'\x00', 1)
-                    metadata[keyword.decode()] = value.decode()
+                    metadata[keyword.decode()] = value.decode('Latin-1')
                 elif chunk_type == b'zTXt':
-                     #Decompress compressed data
+                    # Rozdziel klucz i dane skompresowane
                     keyword, comp_data = chunk_data.split(b'\x00', 1)
-                    value = zlib.decompress(comp_data)
-                    metadata[keyword.decode()] = value.decode()
+
+                    # Sprawdź, czy dane są skompresowane
+                    compression = comp_data.split(b'\x00', 1)
+                    if compression[0] == b'\x00':
+                        # Dane nie są skompresowane
+                        value = compression[1]  # Pomijamy bajt określający metodę kompresji
+                        metadata[keyword.decode()] = value.decode('latin-1')
+                    else:
+                        # Dane są skompresowane, użyj odpowiedniej metody dekompresji
+                        try:
+                            value = zlib.decompress(compression[1])
+                            metadata[keyword.decode()] = value.decode('latin-1')
+                        except zlib.error as e:
+                            print("Błąd podczas dekompresji danych:", e)
                 elif chunk_type == b'cHRM':
                     white_point_x = int.from_bytes(chunk_data[0:4], byteorder='big') / 100000
                     white_point_y = int.from_bytes(chunk_data[4:8], byteorder='big') / 100000
