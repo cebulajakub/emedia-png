@@ -15,7 +15,7 @@ if __name__ == "__main__":
     file_path_copy = r"C:\Users\Jakub\Desktop\EMEDIA\emedia-png\pngs\copy.png"
     input_file_path = file_path
     output_file_path = file_path_copy
-    #create_minimal_png_copy(input_file_path, output_file_path)
+    create_minimal_png_copy(input_file_path, output_file_path)
     read_png_header(file_path_copy)
     #show_png(file_path)
    # furier_trans_png(file_path)
