@@ -1,4 +1,5 @@
 import zlib
+import xml.etree.ElementTree as ET
 
 def read_png_header(file_path):
     metadata = {}
@@ -33,7 +34,7 @@ def read_png_header(file_path):
 
 ##########################################################################333
 
-def read_png_metadata(file_path):
+def read_png_metadata(file_path, sciezka_xml=None):
     metadata = {}
 
     try:
@@ -60,8 +61,17 @@ def read_png_metadata(file_path):
 
                 crc = file.read(4)
 
+                if chunk_type == b'iTXt':
+                    keyword, value = chunk_data.split(b'\x00', 1)
+                    metadata[keyword.decode()] = value.decode()
+                    if sciezka_xml:  # Tworzenie pliku XML tylko dla chunku iTXt
+                            korzen = ET.Element("metadane")
+                            element = ET.SubElement(korzen, keyword.decode())
+                            element.text =value.decode()
+                            drzewo = ET.ElementTree(korzen)
+                            drzewo.write(sciezka_xml)
 
-                if chunk_type == b'tEXt':
+                elif chunk_type == b'tEXt':
                     keyword, value = chunk_data.split(b'\x00', 1)
                     metadata[keyword.decode()] = value.decode()
                 elif chunk_type == b'zTXt':
