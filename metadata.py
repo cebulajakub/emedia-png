@@ -1,7 +1,5 @@
-import io
+
 import zlib
-import gzip
-import png
 import xml.etree.ElementTree as ET
 
 def read_png_header(file_path):
@@ -353,6 +351,9 @@ def create_minimal_png_copy(input_file_path, output_file_path):
                     output_file.write(chunk_type)
                     output_file.write(chunk_data)
                     output_file.write(crc)
+                else:
+                    # Pominięcie nieznanych chunków
+                    print("Pominięto nieznany chunk:", chunk_type)
 
     except Exception as e:
         print("Błąd podczas tworzenia minimalnej kopii pliku PNG:", e)
