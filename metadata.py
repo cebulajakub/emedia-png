@@ -2,6 +2,7 @@ import io
 import zlib
 import gzip
 import png
+import re
 import xml.etree.ElementTree as ET
 from PIL import Image
 import matplotlib.pyplot as plt
@@ -75,7 +76,7 @@ def read_png_metadata(file_path, sciezka_xml=None):
                 crc = file.read(4)
 
                 if chunk_type == b'iTXt':
-                    metadata = read_iTXT_chunk(chunk_data, metadata, sciezka_xml)
+                    metadata = read_iTXT_chunk(chunk_data, metadata)
                 elif chunk_type == b'tEXt':
                     metadata = read_tEXt_chunk(chunk_data, metadata)
                 elif chunk_type == b'zTXt':
@@ -119,9 +120,15 @@ def read_png_metadata(file_path, sciezka_xml=None):
     return metadata, idat
 
 def read_eXIf_chunk(chunk_data, metadata):
-    chunk_file = io.BytesIO(chunk_data)
-    exif_tags = exifread.process_file(chunk_file, details=False)
-    metadata['EXIF'] = exif_tags
+    try:
+        chunk_file = io.BytesIO(chunk_data)
+        exif_tags = exifread.process_file(chunk_file, details=False)
+        for tag in exif_tags:
+            metadata[tag] = str(exif_tags[tag])
+
+    except Exception as e:
+        print("Błąd podczas przetwarzania danych EXIF:", e)
+
     return metadata
     
 
@@ -130,27 +137,32 @@ def read_tEXt_chunk(chunk_data, metadata):
     metadata[keyword.decode()] = value.decode()
     return metadata
 
-def read_iTXT_chunk(chunk_data, metadata, sciezka_xml):
-    keyword, rest = chunk_data.split(b'\x00', 1)
-    compression_flag, rest = rest.split(b'\x00', 1)
-    language_tag, rest = rest.split(b'\x00', 1)
-    translated_keyword, text_data = rest.split(b'\x00', 1)
 
-    keyword = keyword.decode()
-    compression_flag = int.from_bytes(compression_flag, byteorder='big')
-    language_tag = language_tag.decode()
-    translated_keyword = translated_keyword.decode()
 
-    if compression_flag == 1:
-        try:
-            text_data = zlib.decompress(text_data)
-        except zlib.error as e:
-            print("Błąd podczas dekompresji danych algorytmem zlib:", e)
-            return metadata
+def read_iTXT_chunk(chunk_data, metadata):
+    try:
+        keyword, rest = chunk_data.split(b'\x00', 1)
+        compression_flag, rest = rest.split(b'\x00', 1)
+        language_tag, rest = rest.split(b'\x00', 1)
+        translated_keyword, text_data = rest.split(b'\x00', 1)
 
-    text = text_data.decode()
-    metadata[keyword] = text
+        keyword = keyword.decode()
+        compression_flag = int.from_bytes(compression_flag, byteorder='big')
+        language_tag = language_tag.decode()
+        translated_keyword = translated_keyword.decode()
 
+        if compression_flag == 1:
+            try:
+                text_data = zlib.decompress(text_data)
+            except zlib.error as e:
+                print("Błąd podczas dekompresji danych algorytmem zlib:", e)
+                return metadata
+
+        text = text_data.decode()
+        metadata[keyword] = text
+
+    except ValueError as e:
+        print("Błąd podczas parsowania danych iTXt:", e)
     return metadata
 
 
