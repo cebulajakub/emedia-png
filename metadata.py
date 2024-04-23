@@ -161,9 +161,19 @@ def read_iTXT_chunk(chunk_data, metadata):
         text = text_data.decode()
         metadata[keyword] = text
 
+        # Przetwarzanie tagów XML:com.adobe.xmp
+        pattern = r'<(exif:|tiff:)(.*?)>(.*?)<\/\1.*?>'
+        matches = re.findall(pattern, text)
+        for match in matches:
+            tag_type, tag_name, tag_value = match
+            # Dodajemy metadane do słownika metadata
+            metadata[f"{tag_name}"] = tag_value.strip()
+
     except ValueError as e:
         print("Błąd podczas parsowania danych iTXt:", e)
+    
     return metadata
+
 
 
 
