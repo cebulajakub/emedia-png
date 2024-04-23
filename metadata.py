@@ -1,5 +1,7 @@
-
+import io
 import zlib
+import gzip
+import png
 import xml.etree.ElementTree as ET
 
 def read_png_header(file_path):
@@ -146,9 +148,14 @@ def read_png_metadata(file_path, sciezka_xml=None):
     except Exception as e:
         print("Błąd podczas odczytywania metadanych PNG:", e)
 
-    idat = zlib.decompress(idat_data)
+    try:
+        idat = zlib.decompress(idat_data)
+        print(len(idat))
+    except Exception as e:
+        print("Błąd podczas dekompresji danych IDAT:", e)
+        idat = b''  # Ustawienie pustych danych IDAT w przypadku błędu
 
-    return metadata
+    return metadata, idat
 
 
 def read_iTXT_chunk(chunk_data, metadata, sciezka_xml):
@@ -321,6 +328,7 @@ def read_sPLT_chunk(chunk_data, metadata):
     metadata['sPLT'] = {'palette_name': palette_name, 'sample_depth': sample_depth, 'palette': palette}
     return metadata
 
+
 def create_minimal_png_copy(input_file_path, output_file_path):
     try:
         with open(input_file_path, 'rb') as input_file, open(output_file_path, 'wb') as output_file:
@@ -351,9 +359,6 @@ def create_minimal_png_copy(input_file_path, output_file_path):
                     output_file.write(chunk_type)
                     output_file.write(chunk_data)
                     output_file.write(crc)
-                else:
-                    # Pominięcie nieznanych chunków
-                    print("Pominięto nieznany chunk:", chunk_type)
 
     except Exception as e:
         print("Błąd podczas tworzenia minimalnej kopii pliku PNG:", e)

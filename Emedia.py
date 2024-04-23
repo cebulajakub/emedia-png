@@ -8,39 +8,36 @@ from fourier import furier_trans_pngg
 if __name__ == "__main__":
     #file_path = r"C:\Users\Jakub\Desktop\EMEDIA\emedia-png\pngs\itxt.png" # Ścieżka do pliku PNG
    # file_path_xml = r"C:\Users\Jakub\Desktop\EMEDIA\emedia-png\pngs\metadane.xml"
-    #file_path = r"C:\Users\PRO\Desktop\Programy-Projekty\Python\pngs\vwboot.png"
-    file_path = r"C:\Users\PRO\PycharmProjects\emedia-png\pngs\itxt.png"
+    # file_path_copy = r"C:\Users\Jakub\Desktop\EMEDIA\emedia-png\pngs\copy.png"
+    file_path = r"C:\Users\PRO\PycharmProjects\emedia-png\pngs\basn6a08.png"
     file_path_xml = r"C:\Users\PRO\PycharmProjects\emedia-png\pngs\metadane.xml"
-    #file_path = r"C:\Users\PRO\PycharmProjects\emedia-png\pngs\gull.png"
     file_path_copy = r"C:\Users\PRO\PycharmProjects\emedia-png\pngs\copy.png"
-    #file_path_copy = r"C:\Users\Jakub\Desktop\EMEDIA\emedia-png\pngs\copy.png"
+
     input_file_path = file_path
     output_file_path = file_path_copy
-    #create_minimal_png_copy(input_file_path, output_file_path)
-    #read_png_header(file_path)
-   # read_png_header(file_path_copy)
+    create_minimal_png_copy(input_file_path, output_file_path)
+
     #get_decompressed_idat_data(file_path)
-    #show_png(file_path)
-   # furier_trans_png(file_path)
-    furier_trans_pngg(file_path, 50)
-    #equals(file_path)
+
+    #furier_trans_pngg(file_path, 50)
 
 
-   # metadata = read_png_metadata(file_path,file_path_xml)
-   # if metadata:
-      #  print("Metadane PNG:")
-       # for key, value in metadata.items():
-           # print(f"{key}: {value}")
-   # else:
-        #print("Nie udało się wczytać metadanych PNG.")
 
-    metadatacpy = read_png_metadata(file_path_copy, file_path_xml)
+    metadata, idat = read_png_metadata(file_path,file_path_xml)
+    if metadata:
+        print("Metadane PNG:")
+        for key, value in metadata.items():
+            print(f"{key}: {value}")
+    else:
+        print(f"IDATA LENGHT:{len(idat)}")
+
+    metadatacpy, idat = read_png_metadata(file_path_copy, file_path_xml)
     if metadatacpy:
         print("Metadane PNG:")
         for key, value in metadatacpy.items():
             print(f"{key}: {value}")
     else:
-        print("Nie udało się wczytać metadanych PNG.")
+        print(f"IDATA LENGHT:{len(idat)}")
 
 
 
