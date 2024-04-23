@@ -3,7 +3,8 @@ import zlib
 import gzip
 import png
 import xml.etree.ElementTree as ET
-
+from PIL import Image
+import matplotlib.pyplot as plt
 def read_png_header(file_path):
     metadata = {}
 
@@ -30,9 +31,9 @@ def read_png_header(file_path):
                 Compressiom_method = data[10]
                 Filter_method = data[11]
                 Interlace_method = data[12]
-                print(f"Szerokość: {width}, Wysokość: {height}, Bitdepht: {bit_depht}")
-                print(f" color_type: {color_type}, Compressiom_method: {Compressiom_method}")
-                print(f"Filter_method: {Filter_method}, Interlace_method: {Interlace_method}")
+                #print(f"Szerokość: {width}, Wysokość: {height}, Bitdepht: {bit_depht}")
+                #print(f" color_type: {color_type}, Compressiom_method: {Compressiom_method}")
+                #print(f"Filter_method: {Filter_method}, Interlace_method: {Interlace_method}")
                 metadata['width'] = width
                 metadata['height'] = height
                 metadata['bit_depth'] = bit_depht
@@ -45,47 +46,6 @@ def read_png_header(file_path):
 
 ##########################################################################333
 
-def deinterlace(width, height, data):
-    # Przeplot Adam7 ma 7 przeplotów, więc tworzymy odpowiednie listy dla każdego z nich
-    pass1_data = bytearray()
-    pass2_data = bytearray()
-    pass3_data = bytearray()
-    pass4_data = bytearray()
-    pass5_data = bytearray()
-    pass6_data = bytearray()
-    pass7_data = bytearray()
-
-    # Przeprowadzamy deinterlace
-    for y in range(height):
-        for x in range(width):
-            if y % 8 == 0:
-                pass1_data.append(data[y * width + x])
-            elif y % 8 == 4:
-                pass5_data.append(data[y * width + x])
-            elif y % 8 == 2:
-                if x % 2 == 0:
-                    pass2_data.append(data[y * width + x])
-                else:
-                    pass6_data.append(data[y * width + x])
-            elif y % 8 == 6:
-                if x % 2 == 0:
-                    pass3_data.append(data[y * width + x])
-                else:
-                    pass7_data.append(data[y * width + x])
-            elif y % 8 == 1 or y % 8 == 3 or y % 8 == 5 or y % 8 == 7:
-                if x % 4 == 0:
-                    pass4_data.append(data[y * width + x])
-                elif x % 4 == 1:
-                    pass3_data.append(data[y * width + x])
-                elif x % 4 == 2:
-                    pass2_data.append(data[y * width + x])
-                elif x % 4 == 3:
-                    pass1_data.append(data[y * width + x])
-
-    # Łączymy dane z każdego przeplotu w jedną ciągłą tablicę bajtów
-    deinterlaced_data = pass1_data + pass2_data + pass3_data + pass4_data + pass5_data + pass6_data + pass7_data
-
-    return deinterlaced_data
 
 
 ################################################
@@ -93,7 +53,7 @@ def deinterlace(width, height, data):
 def read_png_metadata(file_path, sciezka_xml=None):
     metadata = {}
     idat_data = b''
-    IHDR = read_png_header(file_path)
+    metadata = read_png_header(file_path)
 
     try:
         with open(file_path, 'rb') as file:
@@ -122,6 +82,7 @@ def read_png_metadata(file_path, sciezka_xml=None):
                     metadata = read_zTXt_chunk(chunk_data, metadata)
                 elif chunk_type == b'IDAT':
                     idat_data += chunk_data
+                   # print(chunk_data)
                 elif chunk_type == b'cHRM':
                     metadata = read_cHRM_chunk(chunk_data, metadata)
                 elif chunk_type == b'bKGD':
@@ -148,12 +109,10 @@ def read_png_metadata(file_path, sciezka_xml=None):
     except Exception as e:
         print("Błąd podczas odczytywania metadanych PNG:", e)
 
-    try:
-        idat = zlib.decompress(idat_data)
-        print(len(idat))
-    except Exception as e:
-        print("Błąd podczas dekompresji danych IDAT:", e)
-        idat = b''  # Ustawienie pustych danych IDAT w przypadku błędu
+
+    idat = zlib.decompress(idat_data)
+    #print(idat)
+    print(len(idat))
 
     return metadata, idat
 
@@ -353,8 +312,8 @@ def create_minimal_png_copy(input_file_path, output_file_path):
                 # Odczytaj CRC
                 crc = input_file.read(4)
 
-                # Jeśli chunk jest jednym z wymaganych, skopiuj go
-                if chunk_type in [b'IHDR', b'IDAT', b'IEND', b'PLTE']:
+                # Jeśli chunk jest jednym z wymaganych i długość danych IDAT nie jest zerowa, skopiuj go
+                if chunk_type in [b'IHDR', b'IEND', b'PLTE'] or (chunk_type == b'IDAT' and chunk_length != 0):
                     output_file.write(length_bytes)
                     output_file.write(chunk_type)
                     output_file.write(chunk_data)
@@ -362,5 +321,6 @@ def create_minimal_png_copy(input_file_path, output_file_path):
 
     except Exception as e:
         print("Błąd podczas tworzenia minimalnej kopii pliku PNG:", e)
+
 
 
