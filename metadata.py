@@ -44,7 +44,6 @@ def read_png_header(file_path):
 
                 return metadata
 
-##########################################################################333
 
 
 
@@ -193,7 +192,11 @@ def read_cHRM_chunk(chunk_data, metadata):
 
 
 def read_bKGD_chunk(chunk_data, metadata):
+    print(chunk_data)
     if len(chunk_data) == 1:
+        Palette = int.from_bytes(chunk_data, byteorder='big')
+        metadata['bKGD'] = {'Palette index': Palette}
+    elif len(chunk_data) == 2:
         gray_level = int.from_bytes(chunk_data, byteorder='big')
         metadata['bKGD'] = {'gray_level': gray_level}
     elif len(chunk_data) == 6:
@@ -294,6 +297,8 @@ def create_minimal_png_copy(input_file_path, output_file_path):
             # Kopiuj nagłówek
             output_file.write(input_file.read(8))
 
+            combined_idat_data = b''  # Zmienna do przechowywania połączonych danych IDAT
+
             while True:
                 # Odczytaj długość następnego chunka
                 length_bytes = input_file.read(4)
@@ -312,15 +317,39 @@ def create_minimal_png_copy(input_file_path, output_file_path):
                 # Odczytaj CRC
                 crc = input_file.read(4)
 
-                # Jeśli chunk jest jednym z wymaganych i długość danych IDAT nie jest zerowa, skopiuj go
-                if chunk_type in [b'IHDR', b'IEND', b'PLTE'] or (chunk_type == b'IDAT' and chunk_length != 0):
-                    output_file.write(length_bytes)
-                    output_file.write(chunk_type)
-                    output_file.write(chunk_data)
-                    output_file.write(crc)
+                # Jeśli to chunk IDAT, dodaj jego dane do połączonych danych IDAT
+                if chunk_type == b'IDAT':
+                    combined_idat_data += chunk_data
+                else:
+                    # Jeśli to nie chunk IDAT, zapisz wcześniej połączone dane IDAT
+                    if combined_idat_data:
+                        # Połącz wszystkie chunki IDAT w jeden
+                        combined_idat_chunk = len(combined_idat_data).to_bytes(4, byteorder='big') + b'IDAT' + combined_idat_data + zlib.crc32(b'IDAT' + combined_idat_data).to_bytes(4, byteorder='big')
+                        # Zapisz połączony chunk IDAT do pliku wyjściowego
+                        output_file.write(combined_idat_chunk)
+                        # Wyczyść zmienne zawierające połączone dane IDAT
+                        combined_idat_data = b''
+
+                    # Zapisz aktualny chunk (jeśli to jeden z wymaganych) do pliku wyjściowego
+                    if chunk_type in [b'IHDR', b'IEND', b'PLTE'] or (chunk_type == b'IDAT' and chunk_length != 0):
+                        output_file.write(length_bytes)
+                        output_file.write(chunk_type)
+                        output_file.write(chunk_data)
+                        output_file.write(crc)
+                    else:
+                        # Jeśli to nie jest wymagany chunk, pomiń go
+                        continue
+
+            # Po zakończeniu pętli sprawdź, czy są jeszcze jakieś połączone dane IDAT do zapisania
+            if combined_idat_data:
+                # Połącz wszystkie chunki IDAT w jeden
+                combined_idat_chunk = len(combined_idat_data).to_bytes(4, byteorder='big') + b'IDAT' + combined_idat_data + zlib.crc32(b'IDAT' + combined_idat_data).to_bytes(4, byteorder='big')
+                # Zapisz połączony chunk IDAT do pliku wyjściowego
+                output_file.write(combined_idat_chunk)
 
     except Exception as e:
-        print("Błąd podczas tworzenia minimalnej kopii pliku PNG:", e)
+        print("Błąd podczas kopiowania pliku PNG:", e)
+
 
 
 
