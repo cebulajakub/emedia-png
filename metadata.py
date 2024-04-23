@@ -5,6 +5,7 @@ import png
 import xml.etree.ElementTree as ET
 from PIL import Image
 import matplotlib.pyplot as plt
+import exifread
 def read_png_header(file_path):
     metadata = {}
 
@@ -104,6 +105,8 @@ def read_png_metadata(file_path, sciezka_xml=None):
                     metadata = read_hIST_chunk(chunk_data, metadata)
                 elif chunk_type == b'sPLT':
                     metadata = read_sPLT_chunk(chunk_data, metadata)
+                elif chunk_type == b'eXIf':
+                    metadata = read_eXIf_chunk(chunk_data, metadata)
 
     except Exception as e:
         print("Błąd podczas odczytywania metadanych PNG:", e)
@@ -115,6 +118,17 @@ def read_png_metadata(file_path, sciezka_xml=None):
 
     return metadata, idat
 
+def read_eXIf_chunk(chunk_data, metadata):
+    chunk_file = io.BytesIO(chunk_data)
+    exif_tags = exifread.process_file(chunk_file, details=False)
+    metadata['EXIF'] = exif_tags
+    return metadata
+    
+
+def read_tEXt_chunk(chunk_data, metadata):
+    keyword, value = chunk_data.split(b'\x00', 1)
+    metadata[keyword.decode()] = value.decode()
+    return metadata
 
 def read_iTXT_chunk(chunk_data, metadata, sciezka_xml):
     keyword, rest = chunk_data.split(b'\x00', 1)
@@ -137,20 +151,10 @@ def read_iTXT_chunk(chunk_data, metadata, sciezka_xml):
     text = text_data.decode()
     metadata[keyword] = text
 
-    if sciezka_xml:
-        korzen = ET.Element("metadane")
-        element = ET.SubElement(korzen, keyword)
-        element.text = text
-        drzewo = ET.ElementTree(korzen)
-        drzewo.write(sciezka_xml)
-
     return metadata
 
 
-def read_tEXt_chunk(chunk_data, metadata):
-    keyword, value = chunk_data.split(b'\x00', 1)
-    metadata[keyword.decode()] = value.decode()
-    return metadata
+
 
 
 def read_zTXt_chunk(chunk_data, metadata):
