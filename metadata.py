@@ -98,7 +98,10 @@ def read_png_metadata(file_path, sciezka_xml=None):
                 elif chunk_type == b'sRGB':
                     metadata = read_sRGB_chunk(chunk_data, metadata)
                 elif chunk_type == b'PLTE':
-                    metadata = read_PLTE_chunk(chunk_data, metadata)
+                    metadata = read_sPLT_chunk(chunk_data, metadata)
+
+
+
                 elif chunk_type == b'gAMA':
                     metadata = read_gAMA_chunk(chunk_data, metadata)
                 elif chunk_type == b'tIME':
@@ -213,8 +216,6 @@ def read_exif(chunk_data, metadata):
         # Odczytaj tag, typ danych, liczbę składników i rozmiar
         tag = int.from_bytes(chunk_data[offset + 12 * i:offset + 12 * i + 2], byte_order)
         type = int.from_bytes(chunk_data[offset + 12 * i + 2:offset + 12 * i + 4], byte_order)
-
-
         comp_count = int.from_bytes(chunk_data[offset + 12 * i + 4:offset + 12 * i + 8], byte_order)
         size = bpc(type) * comp_count
 
@@ -243,12 +244,6 @@ def read_eXIf_chunk(chunk_data, metadata):
     except Exception as e:
         print("Błąd podczas przetwarzania danych EXIF:", e)
 
-    return metadata
-
-
-def read_tEXt_chunk(chunk_data, metadata):
-    keyword, value = chunk_data.split(b'\x00', 1)
-    metadata[keyword.decode()] = value.decode()
     return metadata
 
 
@@ -340,7 +335,7 @@ def read_cHRM_chunk(chunk_data, metadata):
 
 
 def read_bKGD_chunk(chunk_data, metadata):
-    print(chunk_data)
+   # print(chunk_data)
     if len(chunk_data) == 1:
         Palette = int.from_bytes(chunk_data, byteorder='big')
         metadata['bKGD'] = {'Palette index': Palette}
