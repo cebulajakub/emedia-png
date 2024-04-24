@@ -247,6 +247,12 @@ def read_eXIf_chunk(chunk_data, metadata):
     return metadata
 
 
+def read_tEXt_chunk(chunk_data, metadata):
+    keyword, value = chunk_data.split(b'\x00', 1)
+    metadata[keyword.decode()] = value.decode()
+    return metadata
+
+
 
 def read_iTXT_chunk(chunk_data, metadata):
     try:
