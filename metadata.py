@@ -3,11 +3,11 @@ import struct
 import zlib
 import gzip
 import png
+import re
 import xml.etree.ElementTree as ET
 from PIL import Image
 import matplotlib.pyplot as plt
-
-
+import exifread
 def read_png_header(file_path):
     metadata = {}
 
@@ -52,6 +52,8 @@ def read_png_header(file_path):
                 return metadata
 
 
+
+
 ################################################
 
 def read_png_metadata(file_path, sciezka_xml=None):
@@ -79,15 +81,14 @@ def read_png_metadata(file_path, sciezka_xml=None):
                 crc = file.read(4)
 
                 if chunk_type == b'iTXt':
-                    metadata = read_iTXT_chunk(chunk_data, metadata, sciezka_xml)
+                    metadata = read_iTXT_chunk(chunk_data, metadata)
                 elif chunk_type == b'tEXt':
                     metadata = read_tEXt_chunk(chunk_data, metadata)
                 elif chunk_type == b'zTXt':
                     metadata = read_zTXt_chunk(chunk_data, metadata)
                 elif chunk_type == b'IDAT':
                     idat_data += chunk_data
-                    # print(chunk_data)
-
+                   # print(chunk_data)
                 elif chunk_type == b'cHRM':
                     metadata = read_cHRM_chunk(chunk_data, metadata)
                 elif chunk_type == b'bKGD':
@@ -232,35 +233,58 @@ def read_exif(chunk_data, metadata):
     metadata['exif'] = ifd_list
     return metadata
 
+def read_eXIf_chunk(chunk_data, metadata):
+    try:
+        chunk_file = io.BytesIO(chunk_data)
+        exif_tags = exifread.process_file(chunk_file, details=False)
+        for tag in exif_tags:
+            metadata[tag] = str(exif_tags[tag])
 
-def read_iTXT_chunk(chunk_data, metadata, sciezka_xml):
-    keyword, rest = chunk_data.split(b'\x00', 1)
-    compression_flag, rest = rest.split(b'\x00', 1)
-    language_tag, rest = rest.split(b'\x00', 1)
-    translated_keyword, text_data = rest.split(b'\x00', 1)
+    except Exception as e:
+        print("Błąd podczas przetwarzania danych EXIF:", e)
 
-    keyword = keyword.decode()
-    compression_flag = int.from_bytes(compression_flag, byteorder='big')
-    language_tag = language_tag.decode()
-    translated_keyword = translated_keyword.decode()
-
-    if compression_flag == 1:
-        try:
-            text_data = zlib.decompress(text_data)
-        except zlib.error as e:
-            print("Błąd podczas dekompresji danych algorytmem zlib:", e)
-            return metadata
-
-    text = text_data.decode()
-    metadata['iTXT'] ={keyword:text}
+    return metadata
 
 
-    if sciezka_xml:
-        korzen = ET.Element("metadane")
-        element = ET.SubElement(korzen, keyword)
-        element.text = text
-        drzewo = ET.ElementTree(korzen)
-        drzewo.write(sciezka_xml)
+def read_tEXt_chunk(chunk_data, metadata):
+    keyword, value = chunk_data.split(b'\x00', 1)
+    metadata[keyword.decode()] = value.decode()
+    return metadata
+
+
+
+def read_iTXT_chunk(chunk_data, metadata):
+    try:
+        keyword, rest = chunk_data.split(b'\x00', 1)
+        compression_flag, rest = rest.split(b'\x00', 1)
+        language_tag, rest = rest.split(b'\x00', 1)
+        translated_keyword, text_data = rest.split(b'\x00', 1)
+
+        keyword = keyword.decode()
+        compression_flag = int.from_bytes(compression_flag, byteorder='big')
+        language_tag = language_tag.decode()
+        translated_keyword = translated_keyword.decode()
+
+        if compression_flag == 1:
+            try:
+                text_data = zlib.decompress(text_data)
+            except zlib.error as e:
+                print("Błąd podczas dekompresji danych algorytmem zlib:", e)
+                return metadata
+
+        text = text_data.decode()
+        metadata[keyword] = text
+
+        # Przetwarzanie tagów XML:com.adobe.xmp
+        pattern = r'<(exif:|tiff:)(.*?)>(.*?)<\/\1.*?>'
+        matches = re.findall(pattern, text)
+        for match in matches:
+            tag_type, tag_name, tag_value = match
+            # Dodajemy metadane do słownika metadata
+            metadata[f"{tag_name}"] = tag_value.strip()
+
+    except ValueError as e:
+        print("Błąd podczas parsowania danych iTXt:", e)
 
     return metadata
 
@@ -487,3 +511,7 @@ def create_minimal_png_copy(input_file_path, output_file_path):
 
     except Exception as e:
         print("Błąd podczas kopiowania pliku PNG:", e)
+
+
+
+
