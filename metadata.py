@@ -1,10 +1,13 @@
 import io
+import struct
 import zlib
 import gzip
 import png
 import xml.etree.ElementTree as ET
 from PIL import Image
 import matplotlib.pyplot as plt
+
+
 def read_png_header(file_path):
     metadata = {}
 
@@ -31,20 +34,22 @@ def read_png_header(file_path):
                 Compressiom_method = data[10]
                 Filter_method = data[11]
                 Interlace_method = data[12]
-                #print(f"Szerokość: {width}, Wysokość: {height}, Bitdepht: {bit_depht}")
-                #print(f" color_type: {color_type}, Compressiom_method: {Compressiom_method}")
-                #print(f"Filter_method: {Filter_method}, Interlace_method: {Interlace_method}")
-                metadata['width'] = width
-                metadata['height'] = height
-                metadata['bit_depth'] = bit_depht
-                metadata['color_type'] = color_type
-                metadata['compression_method'] = Compressiom_method
-                metadata['filter_method'] = Filter_method
-                metadata['interlace_method'] = Interlace_method
+                IHDR_info = {
+                    'width': width,
+                    'height': height,
+                    'bit_depth': bit_depht,
+                    'color_type': color_type,
+                    'Compressiom': Compressiom_method,
+                    'Filter_method': Filter_method,
+                    'Interlace_method': Interlace_method
+
+                }
+
+                metadata['IHDR'] = IHDR_info
+
+
 
                 return metadata
-
-
 
 
 ################################################
@@ -81,7 +86,8 @@ def read_png_metadata(file_path, sciezka_xml=None):
                     metadata = read_zTXt_chunk(chunk_data, metadata)
                 elif chunk_type == b'IDAT':
                     idat_data += chunk_data
-                   # print(chunk_data)
+                    # print(chunk_data)
+
                 elif chunk_type == b'cHRM':
                     metadata = read_cHRM_chunk(chunk_data, metadata)
                 elif chunk_type == b'bKGD':
@@ -104,16 +110,127 @@ def read_png_metadata(file_path, sciezka_xml=None):
                     metadata = read_hIST_chunk(chunk_data, metadata)
                 elif chunk_type == b'sPLT':
                     metadata = read_sPLT_chunk(chunk_data, metadata)
+                elif chunk_type == b'eXIf':
+                    metadata = read_exif(chunk_data, metadata)
+
+
 
     except Exception as e:
         print("Błąd podczas odczytywania metadanych PNG:", e)
 
+    # Przeniesienie dekompresji danych IDAT na zewnątrz pętli while
+    idat_data = zlib.decompress(idat_data)
 
-    idat = zlib.decompress(idat_data)
-    #print(idat)
-    print(len(idat))
+    metadata['IDAT'] = len(idat_data)
 
-    return metadata, idat
+    return metadata, idat_data
+
+
+def translate_tag(tag):
+    tags = {
+        256: 'ImageWidth',
+        257: 'ImageHeight',
+        258: 'BitsPerSample',
+        259: 'Compression',
+        262: 'PhotometricInterpretation',
+        273: 'StripOffsets',
+        277: 'SamplesPerPixel',
+        278: 'RowsPerStrip',
+        279: 'StripByteCounts',
+        282: 'XResolution',
+        283: 'YResolution',
+        284: 'PlanarConfiguration',
+        296: 'ResolutionUnit',
+        513: 'JPEGInterchangeFormat',
+        514: 'ThumbnailLength',
+        515: 'JPEGRestartInterval',
+        531: 'YCbCrPositioning',
+        34665: 'ExifOffset'
+
+
+    }
+    return tags.get(tag, f'Unknown Tag ({tag})')
+
+
+def data_to_value(type, value_data, byte_order):
+    if type == 1:  # BYTE
+        return int.from_bytes(value_data, byteorder=byte_order)
+    elif type == 2:  # ASCII
+        return value_data.decode('utf-8').rstrip('\x00')
+    elif type == 3:  # SHORT
+        return int.from_bytes(value_data[:2], byteorder=byte_order)
+    elif type == 4:  # LONG
+        return int.from_bytes(value_data, byteorder=byte_order)
+    elif type == 5:  # RATIONAL
+        numerator = int.from_bytes(value_data[:4], byteorder=byte_order)
+        denominator = int.from_bytes(value_data[4:], byteorder=byte_order)
+        return (numerator, denominator)
+    elif type == 7:  # UNDEFINED
+        return value_data
+    else:
+        return None  # Unknown data type
+
+
+def bpc(type):
+    if type == 1:  # BYTE
+        return 1
+    elif type == 2:  # ASCII
+        return 1
+    elif type == 3:  # SHORT
+        return 2
+    elif type == 4:  # LONG
+        return 4
+    elif type == 5:  # RATIONAL
+        return 8
+    elif type == 7:  # UNDEFINED
+        return 1
+    else:
+        return 0  # Unknown data type
+
+
+def read_exif(chunk_data, metadata):
+    # Odczytaj informację o kolejności bajtów
+    if chunk_data[:2] == b'II':
+        byte_order = 'little'
+    elif chunk_data[:2] == b'MM':
+        byte_order = 'big'
+    else:
+        return None
+
+    # Odczytaj przesunięcie do IFD
+    offset = int.from_bytes(chunk_data[4:6], byte_order)
+    if offset == 0:
+        offset = 8
+
+    # Odczytaj liczbę wpisów w IFD
+    number_entries = int.from_bytes(chunk_data[offset:offset + 2], byte_order)
+    offset += 2
+
+    # Przetwarzaj każdy wpis IFD
+    ifd_list = []
+    for i in range(number_entries):
+        # Odczytaj tag, typ danych, liczbę składników i rozmiar
+        tag = int.from_bytes(chunk_data[offset + 12 * i:offset + 12 * i + 2], byte_order)
+        type = int.from_bytes(chunk_data[offset + 12 * i + 2:offset + 12 * i + 4], byte_order)
+
+
+        comp_count = int.from_bytes(chunk_data[offset + 12 * i + 4:offset + 12 * i + 8], byte_order)
+        size = bpc(type) * comp_count
+
+
+        if size <= 4:
+            value_data = chunk_data[offset + 12 * i + 8:offset + 12 * i + 12]
+
+        else:
+            data_offset = int.from_bytes(chunk_data[offset + 12 * i + 8:offset + 12 * i + 12], byte_order)
+            value_data = chunk_data[data_offset:data_offset + size]
+
+        value = data_to_value(type, value_data, byte_order)
+        ifd_list.append((translate_tag(tag), value))
+
+    # Zaktualizuj metadane
+    metadata['exif'] = ifd_list
+    return metadata
 
 
 def read_iTXT_chunk(chunk_data, metadata, sciezka_xml):
@@ -135,7 +252,8 @@ def read_iTXT_chunk(chunk_data, metadata, sciezka_xml):
             return metadata
 
     text = text_data.decode()
-    metadata[keyword] = text
+    metadata['iTXT'] ={keyword:text}
+
 
     if sciezka_xml:
         korzen = ET.Element("metadane")
@@ -150,7 +268,13 @@ def read_iTXT_chunk(chunk_data, metadata, sciezka_xml):
 def read_tEXt_chunk(chunk_data, metadata):
     keyword, value = chunk_data.split(b'\x00', 1)
     metadata[keyword.decode()] = value.decode()
+    tekst = {keyword.decode(): value.decode()}
+    metadata['tEXt'] =tekst
     return metadata
+
+
+
+
 
 
 def read_zTXt_chunk(chunk_data, metadata):
@@ -212,7 +336,8 @@ def read_pHYs_chunk(chunk_data, metadata):
     pixels_per_unit_x = int.from_bytes(chunk_data[0:4], byteorder='big')
     pixels_per_unit_y = int.from_bytes(chunk_data[4:8], byteorder='big')
     unit_specifier = int.from_bytes(chunk_data[8:9], byteorder='big')
-    metadata['pHYs'] = {'pixels_per_unit_x': pixels_per_unit_x, 'pixels_per_unit_y': pixels_per_unit_y, 'unit_specifier': unit_specifier}
+    metadata['pHYs'] = {'pixels_per_unit_x': pixels_per_unit_x, 'pixels_per_unit_y': pixels_per_unit_y,
+                        'unit_specifier': unit_specifier}
     return metadata
 
 
@@ -276,28 +401,44 @@ def read_sBIT_chunk(chunk_data, metadata):
 
 
 def read_hIST_chunk(chunk_data, metadata):
-    histogram = [int.from_bytes(chunk_data[i:i+2], byteorder='big') for i in range(0, len(chunk_data), 2)]
+    histogram = [int.from_bytes(chunk_data[i:i + 2], byteorder='big') for i in range(0, len(chunk_data), 2)]
     metadata['hIST'] = histogram
     return metadata
 
 
 def read_sPLT_chunk(chunk_data, metadata):
-    palette_name, sample_depth, entries = chunk_data.split(b'\x00', 2)
-    palette_name = palette_name.decode()
+    # Podziel chunk_data na nazwę palety, głębokość próbki i wpisy
+    palette_name, rest = chunk_data.split(b'\x00', 1)
+    sample_depth, entries = rest[:1], rest[1:]
+
+    # Dekoduj nazwę palety
+    palette_name = palette_name.decode('latin-1')
     sample_depth = int.from_bytes(sample_depth, byteorder='big')
-    entries = [entries[i:i+sample_depth+1] for i in range(0, len(entries), sample_depth+1)]
-    palette = [(entry[0:sample_depth].decode(), int.from_bytes(entry[sample_depth:], byteorder='big')) for entry in entries]
-    metadata['sPLT'] = {'palette_name': palette_name, 'sample_depth': sample_depth, 'palette': palette}
+
+    palette = []
+    entry_length = sample_depth * 5 + 2
+    for i in range(0, len(entries), entry_length):
+        entry = entries[i:i + entry_length]
+        red = int.from_bytes(entry[:sample_depth], byteorder='big')
+        green = int.from_bytes(entry[sample_depth:sample_depth * 2], byteorder='big')
+        blue = int.from_bytes(entry[sample_depth * 2:sample_depth * 3], byteorder='big')
+        alpha = int.from_bytes(entry[sample_depth * 3:sample_depth * 4], byteorder='big')
+        frequency = int.from_bytes(entry[sample_depth * 4:sample_depth * 5 + 2], byteorder='big')
+        palette.append((red, green, blue, alpha, frequency))
+
+    if 'sPLT' not in metadata:
+        metadata['sPLT'] = []
+    metadata['sPLT'].append({'palette_name': palette_name, 'sample_depth': sample_depth, 'palette': palette})
     return metadata
 
 
 def create_minimal_png_copy(input_file_path, output_file_path):
     try:
         with open(input_file_path, 'rb') as input_file, open(output_file_path, 'wb') as output_file:
-            # Kopiuj nagłówek
+            # nagłówek
             output_file.write(input_file.read(8))
 
-            combined_idat_data = b''  # Zmienna do przechowywania połączonych danych IDAT
+            combined_idat_data = b''
 
             while True:
                 # Odczytaj długość następnego chunka
@@ -318,13 +459,15 @@ def create_minimal_png_copy(input_file_path, output_file_path):
                 crc = input_file.read(4)
 
                 # Jeśli to chunk IDAT, dodaj jego dane do połączonych danych IDAT
-                if chunk_type == b'IDAT':
+                if chunk_type == b'IDAT' and chunk_length != 0:
                     combined_idat_data += chunk_data
                 else:
                     # Jeśli to nie chunk IDAT, zapisz wcześniej połączone dane IDAT
                     if combined_idat_data:
                         # Połącz wszystkie chunki IDAT w jeden
-                        combined_idat_chunk = len(combined_idat_data).to_bytes(4, byteorder='big') + b'IDAT' + combined_idat_data + zlib.crc32(b'IDAT' + combined_idat_data).to_bytes(4, byteorder='big')
+                        combined_idat_chunk = len(combined_idat_data).to_bytes(4,
+                          byteorder='big') + b'IDAT' + combined_idat_data + zlib.crc32(
+                            b'IDAT' + combined_idat_data).to_bytes(4, byteorder='big')
                         # Zapisz połączony chunk IDAT do pliku wyjściowego
                         output_file.write(combined_idat_chunk)
                         # Wyczyść zmienne zawierające połączone dane IDAT
@@ -340,16 +483,7 @@ def create_minimal_png_copy(input_file_path, output_file_path):
                         # Jeśli to nie jest wymagany chunk, pomiń go
                         continue
 
-            # Po zakończeniu pętli sprawdź, czy są jeszcze jakieś połączone dane IDAT do zapisania
-            if combined_idat_data:
-                # Połącz wszystkie chunki IDAT w jeden
-                combined_idat_chunk = len(combined_idat_data).to_bytes(4, byteorder='big') + b'IDAT' + combined_idat_data + zlib.crc32(b'IDAT' + combined_idat_data).to_bytes(4, byteorder='big')
-                # Zapisz połączony chunk IDAT do pliku wyjściowego
-                output_file.write(combined_idat_chunk)
+
 
     except Exception as e:
         print("Błąd podczas kopiowania pliku PNG:", e)
-
-
-
-
