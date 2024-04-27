@@ -2,8 +2,11 @@ import io
 import struct
 import zlib
 import gzip
+
+import numpy as np
 import png
 import re
+import binascii
 import xml.etree.ElementTree as ET
 from PIL import Image
 import matplotlib.pyplot as plt
@@ -56,6 +59,8 @@ def read_png_header(file_path):
 
 ################################################
 
+
+
 def read_png_metadata(file_path, sciezka_xml=None):
     metadata = {}
     idat_data = b''
@@ -100,8 +105,6 @@ def read_png_metadata(file_path, sciezka_xml=None):
                 elif chunk_type == b'PLTE':
                     metadata = read_sPLT_chunk(chunk_data, metadata)
 
-
-
                 elif chunk_type == b'gAMA':
                     metadata = read_gAMA_chunk(chunk_data, metadata)
                 elif chunk_type == b'tIME':
@@ -116,19 +119,124 @@ def read_png_metadata(file_path, sciezka_xml=None):
                     metadata = read_sPLT_chunk(chunk_data, metadata)
                 elif chunk_type == b'eXIf':
                     metadata = read_exif(chunk_data, metadata)
-
+                if chunk_type == b'IEND':
+                    metadata['IEND'] = crc
 
 
     except Exception as e:
         print("Błąd podczas odczytywania metadanych PNG:", e)
+    #print(idat_data)
 
-    # Przeniesienie dekompresji danych IDAT na zewnątrz pętli while
-    idat_data = zlib.decompress(idat_data)
 
-    metadata['IDAT'] = len(idat_data)
+    #idat_data = zlib.decompress(idat_data)
+    metadata = read_IDAT_chunk(idat_data, metadata)
+
 
     return metadata, idat_data
 
+#https://pyokagan.name/blog/2019-10-14-png/
+def read_IDAT_chunk(idat_data, metadata):
+    # Odczytujemy metadane obrazu
+    width = metadata['IHDR']['width']
+    height = metadata['IHDR']['height']
+    color_type = metadata['IHDR']['color_type']
+    bit_depth = metadata['IHDR']['bit_depth']
+
+    # Obliczamy bytes_per_pixel
+    bytes_per_pixel = calculate_bytes_per_pixel(metadata)
+    stride = width * bytes_per_pixel
+
+    # Dekompresujemy dane IDAT
+    decompressed_idat_data = zlib.decompress(idat_data)
+
+    # Odtwarzamy piksele
+    Recon = []
+    i = 0
+    for r in range(height):  # dla każdej linii skanowania
+        filter_type = decompressed_idat_data[i]  # pierwszy bajt linii skanowania to typ filtra
+        #print(filter_type)
+
+        i += 1
+        for c in range(stride):  # dla każdego bajtu w linii skanowania
+            Filt_x = decompressed_idat_data[i]
+
+            i += 1
+            if filter_type == 0:  # None
+                Recon_x = Filt_x
+            elif filter_type == 1:  # Sub
+                Recon_x = Filt_x + Recon_a(r, c, Recon, stride, bytes_per_pixel)
+            elif filter_type == 2:  # Up
+                Recon_x = Filt_x + Recon_b(r, c, Recon, stride)
+            elif filter_type == 3:  # Average
+                Recon_x = Filt_x + (Recon_a(r, c, Recon, stride, bytes_per_pixel) + Recon_b(r, c, Recon, stride)) // 2
+            elif filter_type == 4:  # Paeth
+                Recon_x = Filt_x + PaethPredictor(Recon_a(r, c, Recon, stride, bytes_per_pixel), Recon_b(r, c, Recon, stride),
+                                                  Recon_c(r, c, Recon, stride, bytes_per_pixel))
+            else:
+                print('unknown filter type: ' + str(filter_type))
+                metadata['IDAT'] = len(idat_data)
+
+                # Zwracamy metadane
+                return metadata
+            Recon.append(Recon_x & 0xff)  # przycinanie do bajtu
+
+    image_array = np.array(Recon).reshape((height, width, bytes_per_pixel))
+
+    # Wyświetlamy obraz
+    plt.imshow(image_array)
+
+    plt.show()
+
+    # Zapisujemy dane IDAT w metadanych
+    metadata['IDAT'] = len(idat_data)
+
+    # Zwracamy metadane
+    return metadata
+
+
+def calculate_bytes_per_pixel(metadata):
+    color_type = metadata['IHDR']['color_type']
+    bit_depth = metadata['IHDR']['bit_depth']
+
+    color_type_bytes_per_pixel = {
+        0: bit_depth // 8,  # Greyscale
+        2: 3 * (bit_depth // 8),  # Truecolour (RGB)
+        3: 1,  # Indexed-colour
+        4: 2 * (bit_depth // 8),  # Greyscale with alpha
+        6: 4 * (bit_depth // 8)  # Truecolour with alpha (RGBA)
+    }
+    if color_type in color_type_bytes_per_pixel:
+        return color_type_bytes_per_pixel[color_type]
+    else:
+        # Domyślnie załóżmy 3 bajty na piksel dla innych niezdefiniowanych typów
+        raise Exception('unknown color_type: ' + str(color_type))
+
+
+
+def Recon_a(r, c, Recon, stride, bytes_per_pixel):
+    return Recon[r * stride + c - bytes_per_pixel] if c >= bytes_per_pixel else 0
+
+
+def Recon_b(r, c, Recon, stride):
+    return Recon[(r - 1) * stride + c] if r > 0 else 0
+
+
+def Recon_c(r, c, Recon, stride, bytes_per_pixel):
+    return Recon[(r - 1) * stride + c - bytes_per_pixel] if r > 0 and c >= bytes_per_pixel else 0
+
+
+def PaethPredictor(a, b, c):
+    p = a + b - c
+    pa = abs(p - a)
+    pb = abs(p - b)
+    pc = abs(p - c)
+    if pa <= pb and pa <= pc:
+        Pr = a
+    elif pb <= pc:
+        Pr = b
+    else:
+        Pr = c
+    return Pr
 
 def translate_tag(tag):
     tags = {
@@ -149,20 +257,30 @@ def translate_tag(tag):
         514: 'ThumbnailLength',
         515: 'JPEGRestartInterval',
         531: 'YCbCrPositioning',
-        34665: 'ExifOffset'
+        34665: 'ExifOffset',
+        36864: 'ExifVersion',
+        36867: 'DateTimeOriginal',
+        37121: 'ComponentsConfiguration',
+        40960: 'FlashpixVersion',
+        40961: 'ColorSpace'
+
 
 
     }
     return tags.get(tag, f'Unknown Tag ({tag})')
 
 
-def data_to_value(type, value_data, byte_order):
+def data_to_value(type, value_data, byte_order, isIFD):
     if type == 1:  # BYTE
         return int.from_bytes(value_data, byteorder=byte_order)
     elif type == 2:  # ASCII
         return value_data.decode('utf-8').rstrip('\x00')
     elif type == 3:  # SHORT
-        return int.from_bytes(value_data[:2], byteorder=byte_order)
+        if isIFD:
+            return int.from_bytes(value_data[:2], byteorder=byte_order)
+
+        else:
+            return value_data[:2]
     elif type == 4:  # LONG
         return int.from_bytes(value_data, byteorder=byte_order)
     elif type == 5:  # RATIONAL
@@ -192,6 +310,8 @@ def bpc(type):
         return 0  # Unknown data type
 
 
+
+#https://www.media.mit.edu/pia/Research/deepview/exif.html
 def read_exif(chunk_data, metadata):
     # Odczytaj informację o kolejności bajtów
     if chunk_data[:2] == b'II':
@@ -201,38 +321,73 @@ def read_exif(chunk_data, metadata):
     else:
         return None
 
-    # Odczytaj przesunięcie do IFD
-    offset = int.from_bytes(chunk_data[4:6], byte_order)
-    if offset == 0:
-        offset = 8
+    # Odczytaj przesunięcie do IFD0
+    offset_ifd0 = int.from_bytes(chunk_data[4:6], byte_order)
+    if offset_ifd0 == 0:
+        offset_ifd0 = 8
 
-    # Odczytaj liczbę wpisów w IFD
-    number_entries = int.from_bytes(chunk_data[offset:offset + 2], byte_order)
-    offset += 2
+    # Odczytaj liczbę wpisów w IFD0
+    number_entries_ifd0 = int.from_bytes(chunk_data[offset_ifd0:offset_ifd0 + 2], byte_order)
+    offset_ifd0 += 2
 
-    # Przetwarzaj każdy wpis IFD
-    ifd_list = []
-    for i in range(number_entries):
+    # Przetwarzaj każdy wpis IFD0
+    ifd0_list = []
+    exif_offset = None
+    for i in range(number_entries_ifd0):
         # Odczytaj tag, typ danych, liczbę składników i rozmiar
-        tag = int.from_bytes(chunk_data[offset + 12 * i:offset + 12 * i + 2], byte_order)
-        type = int.from_bytes(chunk_data[offset + 12 * i + 2:offset + 12 * i + 4], byte_order)
-        comp_count = int.from_bytes(chunk_data[offset + 12 * i + 4:offset + 12 * i + 8], byte_order)
+        tag = int.from_bytes(chunk_data[offset_ifd0 + 12 * i:offset_ifd0 + 12 * i + 2], byte_order)
+        type = int.from_bytes(chunk_data[offset_ifd0 + 12 * i + 2:offset_ifd0 + 12 * i + 4], byte_order)
+        comp_count = int.from_bytes(chunk_data[offset_ifd0 + 12 * i + 4:offset_ifd0 + 12 * i + 8], byte_order)
         size = bpc(type) * comp_count
 
-
         if size <= 4:
-            value_data = chunk_data[offset + 12 * i + 8:offset + 12 * i + 12]
-
+            value_data = chunk_data[offset_ifd0 + 12 * i + 8:offset_ifd0 + 12 * i + 12]
         else:
-            data_offset = int.from_bytes(chunk_data[offset + 12 * i + 8:offset + 12 * i + 12], byte_order)
+            data_offset = int.from_bytes(chunk_data[offset_ifd0 + 12 * i + 8:offset_ifd0 + 12 * i + 12], byte_order)
             value_data = chunk_data[data_offset:data_offset + size]
 
-        value = data_to_value(type, value_data, byte_order)
-        ifd_list.append((translate_tag(tag), value))
+        # Sprawdź czy to jest tag Exif Offset
+        if tag == 0x8769:
+            exif_offset = int.from_bytes(value_data, byte_order)
 
-    # Zaktualizuj metadane
-    metadata['exif'] = ifd_list
+        ifd0_list.append((translate_tag(tag), data_to_value(type, value_data, byte_order,True)))
+
+    # Zaktualizuj metadane IFD0
+    metadata['ifd0'] = ifd0_list
+
+    # Jeśli istnieje Exif Offset, odczytaj Exif SubIFD
+    if exif_offset is not None:
+        exif_ifd_metadata = read_exif_ifd(chunk_data, exif_offset, byte_order)
+        metadata['exif_subifd'] = exif_ifd_metadata
+
     return metadata
+
+
+def read_exif_ifd(chunk_data, exif_offset, byte_order):
+    # Odczytaj liczbę wpisów w Exif SubIFD
+    number_entries_exif_ifd = int.from_bytes(chunk_data[exif_offset:exif_offset + 2], byte_order)
+    exif_offset += 2
+
+    # Przetwarzaj każdy wpis Exif SubIFD
+    exif_ifd_list = []
+    for i in range(number_entries_exif_ifd):
+        # Odczytaj tag, typ danych, liczbę składników i rozmiar
+        tag = int.from_bytes(chunk_data[exif_offset + 12 * i:exif_offset + 12 * i + 2], byte_order)
+        type = int.from_bytes(chunk_data[exif_offset + 12 * i + 2:exif_offset + 12 * i + 4], byte_order)
+        comp_count = int.from_bytes(chunk_data[exif_offset + 12 * i + 4:exif_offset + 12 * i + 8], byte_order)
+        size = bpc(type) * comp_count
+
+        if size <= 4:
+            value_data = chunk_data[exif_offset + 12 * i + 8:exif_offset + 12 * i + 12]
+        else:
+            data_offset = int.from_bytes(chunk_data[exif_offset + 12 * i + 8:exif_offset + 12 * i + 12], byte_order)
+            value_data = chunk_data[data_offset:data_offset + size]
+
+
+        exif_ifd_list.append((translate_tag(tag), data_to_value(type, value_data, byte_order,False)))
+
+    return exif_ifd_list
+
 
 def read_eXIf_chunk(chunk_data, metadata):
     try:
@@ -247,14 +402,12 @@ def read_eXIf_chunk(chunk_data, metadata):
     return metadata
 
 
-def read_tEXt_chunk(chunk_data, metadata):
-    keyword, value = chunk_data.split(b'\x00', 1)
-    metadata[keyword.decode()] = value.decode()
-    return metadata
+
 
 
 
 def read_iTXT_chunk(chunk_data, metadata):
+    iTxt_info = {}
     try:
         keyword, rest = chunk_data.split(b'\x00', 1)
         compression_flag, rest = rest.split(b'\x00', 1)
@@ -274,15 +427,29 @@ def read_iTXT_chunk(chunk_data, metadata):
                 return metadata
 
         text = text_data.decode()
-        metadata[keyword] = text
 
+
+
+        metadata[keyword] = text
         # Przetwarzanie tagów XML:com.adobe.xmp
-        pattern = r'<(exif:|tiff:)(.*?)>(.*?)<\/\1.*?>'
-        matches = re.findall(pattern, text)
+        #pattern = r'<(exif:|tiff:)(.*?)>(.*?)<\/\1.*?>'
+        pattern = r'<(exif|tiff):([^>]+)>(.*?)<\/\1:.*?>'
+        #pattern = r'<(?:exif|tiff):([^>]+)>\s*<rdf:Seq>\s*<rdf:li>(.*?)<\/rdf:li>\s*<\/rdf:Seq>'
+        matches = re.findall(pattern, text,re.DOTALL)
+        #matches = re.findall(pattern, text)
+
+
         for match in matches:
-            tag_type, tag_name, tag_value = match
+            print(match[2])
+            if "<rdf:Seq>" in match[2] and "<rdf:li>" in match[2]:
+                extracted_value = re.search(r'<rdf:li>(.*?)<\/rdf:li>', match[2]).group(1)
+                print(f"Wartość wyodrębniona: {extracted_value}")
+                tag_type, tag_name, tag_value = match[0], match[1], extracted_value
+                metadata[f"{tag_name}"] = tag_value.strip()
+            else:
+                tag_type, tag_name, tag_value = match
             # Dodajemy metadane do słownika metadata
-            metadata[f"{tag_name}"] = tag_value.strip()
+                metadata[f"{tag_name}"] = tag_value.strip()
 
     except ValueError as e:
         print("Błąd podczas parsowania danych iTXt:", e)
@@ -291,12 +458,13 @@ def read_iTXT_chunk(chunk_data, metadata):
 
 
 def read_tEXt_chunk(chunk_data, metadata):
-    keyword, value = chunk_data.split(b'\x00', 1)
-    metadata[keyword.decode()] = value.decode()
-    tekst = {keyword.decode(): value.decode()}
-    metadata['tEXt'] =tekst
+    try:
+        keyword, value = chunk_data.split(b'\x00', 1)
+        metadata[keyword.decode()] = value.decode()
+        metadata['tEXt'] = {keyword.decode(): value.decode()}
+    except ValueError as e:
+        print("Error parsing tEXt chunk data:", e)
     return metadata
-
 
 
 
@@ -319,6 +487,9 @@ def read_zTXt_chunk(chunk_data, metadata):
     return metadata
 
 
+
+
+#
 def read_cHRM_chunk(chunk_data, metadata):
     white_point_x = int.from_bytes(chunk_data[0:4], byteorder='big') / 100000
     white_point_y = int.from_bytes(chunk_data[4:8], byteorder='big') / 100000
@@ -372,10 +543,7 @@ def read_sRGB_chunk(chunk_data, metadata):
     return metadata
 
 
-def read_PLTE_chunk(chunk_data, metadata):
-    palette = int.from_bytes(chunk_data, byteorder='big')
-    metadata['PLTE'] = palette
-    return metadata
+
 
 
 def read_gAMA_chunk(chunk_data, metadata):
@@ -411,17 +579,29 @@ def read_tRNS_chunk(chunk_data, metadata):
 
 
 def read_sBIT_chunk(chunk_data, metadata):
-    if b'PLTE' in metadata:
-        palette_size = len(metadata[b'PLTE'])
-        if palette_size > 0:
-            if palette_size == 1:
-                gray_bits = int.from_bytes(chunk_data, byteorder='big')
-                metadata['sBIT'] = {'gray_bits': gray_bits}
-            elif palette_size == 3:
-                red_bits = int.from_bytes(chunk_data[0:1], byteorder='big')
-                green_bits = int.from_bytes(chunk_data[1:2], byteorder='big')
-                blue_bits = int.from_bytes(chunk_data[2:3], byteorder='big')
-                metadata['sBIT'] = {'red_bits': red_bits, 'green_bits': green_bits, 'blue_bits': blue_bits}
+    color_type = metadata['IHDR']['color_type']
+    sample_depth = metadata['IHDR']['bit_depth']
+
+    if color_type == 0:
+        gray_bits = int.from_bytes(chunk_data, byteorder='big')
+        metadata['sBIT'] = {'white_bits': gray_bits}
+    elif color_type == 2 or color_type == 3:
+        red_bits = int.from_bytes(chunk_data[0:1], byteorder='big')
+        green_bits = int.from_bytes(chunk_data[1:2], byteorder='big')
+        blue_bits = int.from_bytes(chunk_data[2:3], byteorder='big')
+        metadata['sBIT'] = {'red_bits': red_bits, 'green_bits': green_bits, 'blue_bits': blue_bits}
+    elif color_type == 4:
+        gray_bits = int.from_bytes(chunk_data[0:1], byteorder='big')
+        alpha_bits = int.from_bytes(chunk_data[1:2], byteorder='big')
+        metadata['sBIT'] = {'white_bits': gray_bits, 'alpha_bits': alpha_bits}
+    elif color_type == 6:
+        red_bits = int.from_bytes(chunk_data[0:1], byteorder='big')
+        green_bits = int.from_bytes(chunk_data[1:2], byteorder='big')
+        blue_bits = int.from_bytes(chunk_data[2:3], byteorder='big')
+        alpha_bits = int.from_bytes(chunk_data[3:4], byteorder='big')
+        metadata['sBIT'] = {'red_bits': red_bits, 'green_bits': green_bits, 'blue_bits': blue_bits,
+                            'alpha_bits': alpha_bits}
+
     return metadata
 
 
