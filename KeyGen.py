@@ -6,16 +6,19 @@ class KeyGen:
     def __init__(self, keysize):
         self.keysize = keysize
         self.prime = keysize / 2
-
+        self.p = 0
+        self.q = 0
         self.phi = 0
         self.n = 0
         self.e = 0
         self.d = 0
+        self.public_key = (self.e, self.n)
+        self.private_key = (self.d, self.n)
 
     # https://inventwithpython.com/rabinMiller.py
     def rabinMiller(self, num):
         # Returns True if num is a prime number.
-
+        #print("Miller")
         s = num - 1
         t = 0
         while s % 2 == 0:
@@ -59,11 +62,13 @@ class KeyGen:
                      983, 991, 997]
 
         if num in lowPrimes:
+           # print("Correct")
             return True
 
         # See if any of the low prime numbers can divide num
         for prime in lowPrimes:
             if num % prime == 0:
+                #print("false")
                 return False
 
         # If all else fails, call rabinMiller() to determine if num is a prime.
@@ -78,39 +83,58 @@ class KeyGen:
 
         return prime_gen
 
-    # Python program to demonstrate working of extended
-    # Euclidean Algorithm
+
+
     # https://www.geeksforgeeks.org/python-program-for-basic-and-extended-euclidean-algorithms-2/
-    # function for extended Euclidean Algorithm
-    def gcdExtended(self, a, b):
-        # Base Case
-        if a == 0:
-            return b, 0, 1
-
-        gcd, x1, y1 = self.gcdExtended(b % a, a)
-
-        # Update x and y using results of recursive
-        # call
-        x = y1 - (b // a) * x1
-        y = x1
-
-        return gcd, x, y
-
     def gcd(self, e, phi):
         if phi == 0:
             return e
         else:
             return self.gcd(phi, e % phi)
 
+    #https: // stackoverflow.com / questions / 4798654 / modular - multiplicative - inverse - function - in -python
+    def egcd(self, a, b):
+        if a == 0:
+            return (b, 0, 1)
+        else:
+            g, y, x = self.egcd(b % a, a)
+            return (g, x - (b // a) * y, y)
+
+    def modinv(self, a, m):
+        g, x, y = self.egcd(a, m)
+        if g != 1:
+            raise Exception('modular inverse does not exist')
+        else:
+            return x % m
+
+
+#https://www.youtube.com/watch?v=-0slxSL9B6A
     def Keys_gen(self):
         p, q = self.generate_prime(), self.generate_prime()
         while p == q:
             q = self.generate_prime()
-        print(q)
+        self.p, self.q = p, q
         n = p * q
         self.n = n
-        phi = (p - 1) * (q - 1)
+        phi = (p - 1) * (q - 1) # Euler Totient  fun
         self.phi = phi
+        e = random.randrange(int(2 ** (self.keysize - 1)), int(2 ** self.keysize))
+        # e - 1<e<Phi
+        # e - Najwiekszy wsp dzielnik z Phi to 1 -  liczby sa wzglednie pierwsze
+        while self.gcd(e, phi) != 1 and e >= phi:
+            e = random.randrange(int(2 ** (self.keysize - 1)), int(2 ** self.keysize))
+
+        self.e = e
+        # d - d*e mod phi = 1
+        #self.d = self.modinv(self.e, self.phi)
+
+        self.d = pow(self.e, -1, self.phi)
+        self.public_key = (self.e, self.n)
+        self.private_key = (self.d, self.n)
+
+
+
+
 
     ''''''''''
     def Public_Private_gen(self, min_val, max_val):
@@ -129,10 +153,18 @@ class KeyGen:
         return p, q, n, phi, e
     '''''''''''
 
+    def Print_Keys(self):
+        print(f"Key Size {self.keysize}")
+        print(f"Prime Size {self.prime}")
+        print(f" p: {self.p} \n q: {self.q}  \n n: {self.n} \n d: {self.d}")
+
 
 
 
 key = KeyGen(1024)
 
-print(key.keysize)
+#print(key.keysize)
 key.Keys_gen()
+key.Print_Keys()
+
+
