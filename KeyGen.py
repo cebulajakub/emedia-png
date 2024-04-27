@@ -1,11 +1,14 @@
 import random
 import math
+import zlib
+
+from metadata import read_png_metadata
 
 
 class KeyGen:
     def __init__(self, keysize):
         self.keysize = keysize
-        self.prime = keysize / 2
+        self.prime = keysize // 2
         self.p = 0
         self.q = 0
         self.phi = 0
@@ -75,11 +78,11 @@ class KeyGen:
         return self.rabinMiller(num)
 
     def generate_prime(self):
-        prime_gen = random.randrange(int(2 ** (self.prime - 1)), int(2 ** self.prime))
+        prime_gen = random.randrange((2 ** (self.prime - 1)), (2 ** self.prime))
         print(f"prime_gen: {prime_gen} ")
 
         while not self.isPrime(prime_gen):
-            prime_gen = random.randrange(int(2 ** (self.prime - 1)), int(2 ** self.prime))
+            prime_gen = random.randrange((2 ** (self.prime - 1)), (2 ** self.prime))
 
         return prime_gen
 
@@ -118,11 +121,11 @@ class KeyGen:
         self.n = n
         phi = (p - 1) * (q - 1) # Euler Totient  fun
         self.phi = phi
-        e = random.randrange(int(2 ** (self.keysize - 1)), int(2 ** self.keysize))
+        e = random.randrange((2 ** (self.keysize - 1)), (2 ** self.keysize))
         # e - 1<e<Phi
         # e - Najwiekszy wsp dzielnik z Phi to 1 -  liczby sa wzglednie pierwsze
         while self.gcd(e, phi) != 1 and e >= phi:
-            e = random.randrange(int(2 ** (self.keysize - 1)), int(2 ** self.keysize))
+            e = random.randrange((2 ** (self.keysize - 1)), (2 ** self.keysize))
 
         self.e = e
         # d - d*e mod phi = 1
@@ -133,26 +136,6 @@ class KeyGen:
         self.private_key = (self.d, self.n)
 
 
-
-
-
-    ''''''''''
-    def Public_Private_gen(self, min_val, max_val):
-        p, q = self.generate_prime(min_val, max_val), self.generate_prime(min_val, max_val)
-
-        while p == q:
-            q = self.generate_prime(min_val, max_val)
-
-        n = p * q
-        phi = (p - 1) * (q - 1)
-
-        e = random.randint(3, phi - 1)
-        while self.gcd(e, phi) != 1:
-            e = random.randint(3, phi - 1)
-
-        return p, q, n, phi, e
-    '''''''''''
-
     def Print_Keys(self):
         print(f"Key Size {self.keysize}")
         print(f"Prime Size {self.prime}")
@@ -161,10 +144,122 @@ class KeyGen:
 
 
 
-key = KeyGen(1024)
+#key = KeyGen(1024)
 
 #print(key.keysize)
-key.Keys_gen()
-key.Print_Keys()
+#key.Keys_gen()
+#key.Print_Keys()
+#amount_of_bytes_to_substract_from_chunk_size = 1
+#encrypted_chunk_size_in_bytes_substracted = key.keysize // 8 - amount_of_bytes_to_substract_from_chunk_size
+#print(f"encrypted_chunk_size_in_bytes_substracted{encrypted_chunk_size_in_bytes_substracted}  Klucz W BAJTACH = {key.keysize // 8}")
+class RSA:
+    def __init__(self, size, filepath):
+        KEYGEN = KeyGen(size)
+        KEYGEN.Keys_gen()
+        self.public_keys_info = KEYGEN.public_key
+        self.filepath = filepath
+
+        with open(filepath, 'rb') as file:
+            self.file_data = file.read()
+
+        self.metadata, self.Idat = read_png_metadata(filepath)
+        # Blok musi być o n-1 od klucza
+        self.block_bytes_size = size // 8 - 1
+        # Krypto blok musi być takiej samej długości co klucz
+        self.crypto_block_bytes_size = size // 8
+
+    def Electronic_Code_Book_encrypt(self):
+        crypto_idat = []
+        crypto_junk =[]
+        decompress_idat = zlib.decompress(self.Idat)
+        # Czy zdekompresowane czy nie
+        length_of_original_idat = len(decompress_idat)
+        print("length_of_original_idat:",length_of_original_idat)
+        print("block_bytes_size:", self.block_bytes_size)
+        print("crypto_block_bytes_size",self.crypto_block_bytes_size)
+        for i in range(0, length_of_original_idat, self.block_bytes_size):
 
 
+            raw_block = bytes(decompress_idat[i:i + self.block_bytes_size])
+
+            #Liczba^e mod n
+            encryption = pow(int.from_bytes(raw_block, 'big'), self.public_keys_info[0], self.public_keys_info[1])
+            encryption_bytes = encryption.to_bytes(self.crypto_block_bytes_size, 'big')
+            print("encryption_bytes:",encryption_bytes)
+            #osatni ne przechowuje informacji tylko jest zgodny z kluczem
+            crypto_idat.append(encryption_bytes[:-1])
+            crypto_junk.append(encryption_bytes[-1])
+
+            #crypto_idat.append(encryption_bytes)
+
+
+        return crypto_idat
+
+    def create_encrypted_image(self, encrypted_data, output_path):
+        try:
+            with open(self.filepath, 'rb') as file:
+                # Odczytaj nagłówek PNG
+                png_header = file.read(8)
+
+                # Odczytaj chunk IHDR
+                ihdr_chunk_length_bytes = file.read(4)
+                ihdr_chunk_length = int.from_bytes(ihdr_chunk_length_bytes, byteorder='big')
+                ihdr_chunk = ihdr_chunk_length_bytes + file.read(ihdr_chunk_length + 8)
+
+                # Odczytaj pozostałe chunki metadanych (z wyjątkiem IDAT i IEND)
+                other_chunks = b''
+                while True:
+                    length_bytes = file.read(4)
+                    if not length_bytes:
+                        break
+
+                    chunk_length = int.from_bytes(length_bytes, byteorder='big')
+                    chunk_type = file.read(4)
+                    chunk_data = file.read(chunk_length)
+                    crc = file.read(4)
+
+                    if chunk_type not in [b'IDAT', b'IEND']:  # Pomijamy IDAT i IEND
+                        other_chunks += length_bytes + chunk_type + chunk_data + crc
+
+                # Otwórz nowy plik PNG w trybie zapisu binarnego
+                with open(output_path, 'wb') as ofile:
+                    # Zapisz nagłówek PNG
+                    ofile.write(png_header)
+
+                    # Zapisz chunk IHDR
+                    ofile.write(ihdr_chunk)
+
+                    # Zapisz pozostałe chunki metadanych
+                    ofile.write(other_chunks)
+
+                    # Zapisz chunk IDAT
+                    idat_length = sum(len(block) for block in encrypted_data)
+                    ofile.write(idat_length.to_bytes(4, byteorder='big'))  # Długość IDAT
+                    ofile.write(b'IDAT')  # Typ chunku
+                    for encrypted_block in encrypted_data:
+                        ofile.write(encrypted_block)  # Zaszyfrowane dane
+
+                    # Oblicz i zapisz CRC dla chunku IDAT
+                    crc_data = b'IDAT' + b''.join(encrypted_data)
+                    crc32_idat = zlib.crc32(crc_data).to_bytes(4, byteorder='big')
+                    ofile.write(crc32_idat)
+
+                    # Dodaj chunk IEND na koniec pliku
+                    ofile.write(b'\x00\x00\x00\x00IEND\xaeB`\x82')
+
+        except Exception as e:
+            print("Błąd podczas tworzenia zaszyfrowanego obrazka PNG:", e)
+
+
+file_path = r"C:\Users\PRO\PycharmProjects\emedia-png\pngs\basn6a08.png"
+file_crypto = r"C:\Users\PRO\PycharmProjects\emedia-png\crypto.png"
+rsa = RSA(128, file_path)
+crypto_data = rsa.Electronic_Code_Book_encrypt()
+key_str = str(rsa.public_keys_info[0])
+print("key lenght",len(key_str))
+rsa.create_encrypted_image(crypto_data, file_crypto)
+
+
+#print(zlib)# w bytes
+
+#print(rsa.block_bytes_size)
