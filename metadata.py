@@ -52,8 +52,8 @@ def read_png_header(file_path):
                     'Interlace_method': Interlace_method
 
                 }
-                print(bit_depht)
-                print("2^BITDEPTH = ", 2 ** bit_depht)
+                #print(bit_depht)
+                #print("2^BITDEPTH = ", 2 ** bit_depht)
                 metadata['IHDR'] = IHDR_info
 
                 return metadata
@@ -113,7 +113,7 @@ def read_png_metadata(file_path):
                 elif chunk_type == b'tIME':
                     metadata = read_tIME_chunk(chunk_data, metadata)
                 elif chunk_type == b'tRNS':
-                    print("tRNS")
+                    #print("tRNS")
                     metadata = read_tRNS_chunk(chunk_data, metadata)
                 elif chunk_type == b'sBIT':
                     metadata = read_sBIT_chunk(chunk_data, metadata)
@@ -130,9 +130,48 @@ def read_png_metadata(file_path):
     # print(idat_data)
 
     #idat_data = zlib.decompress(idat_data)
+
     metadata = read_IDAT_chunk(idat_data, metadata)
 
     return metadata, idat_data
+
+
+def apply_palette(Recon, metadata):
+    """Replace indexed pixels in parsed IDAT with corresponding palette RGB values"""
+    print('Applying palette')
+
+    # Sprawdź, czy istnieje paleta PLTE w metadanych
+    if 'PLTE' not in metadata:
+        print("PLTE chunk not found.")
+        return
+
+    # Pobierz paletę RGB z metadanych
+    palette = metadata['PLTE']['palette']
+
+    # Sprawdź, czy dane IDAT zostały wcześniej przetworzone
+    if Recon is None:
+        print("No data to apply palette.")
+        return
+
+    # Aplikuj paletę do danych IDAT (Recon)
+    applied_palette_data = bytearray()
+    for pixel in Recon:
+        try:
+            pixel_index = int(pixel)
+            if 0 <= pixel_index < len(palette):
+                applied_palette_data.extend(palette[pixel_index])
+            else:
+
+                print("Invalid palette index:", pixel_index)
+                # Wybierz domyślną wartość w przypadku nieprawidłowego indeksu
+                applied_palette_data.extend(bytes([0, 0, 0]))  # Możesz wybrać inną domyślną wartość
+        except ValueError:
+            print("Invalid pixel value:", pixel)
+
+            continue
+
+
+    return applied_palette_data
 
 
 # https://pyokagan.name/blog/2019-10-14-png/
@@ -149,6 +188,7 @@ def read_IDAT_chunk(idat_data, metadata):
 
     # Obliczamy bytes_per_pixel
     bytes_per_pixel = calculate_bytes_per_pixel(metadata)
+
     stride = width * bytes_per_pixel
    # print("WIDTH:", width, " height :", height, " color_type :", color_type, " bit_depth :", bit_depth, " stride :", stride)
 
@@ -191,12 +231,16 @@ def read_IDAT_chunk(idat_data, metadata):
             Recon.append(Recon_x & 0xff)  # przycinanie do bajtu
 
     image_array = np.array(Recon).reshape((height, width, bytes_per_pixel))
-    #print(image_array)
-
+    print(image_array)
+   # print(len(Recon))
+    test = apply_palette(Recon, metadata)
+    #print(len(test))
+    test = np.array(test).reshape((height, width, 3))
+    #print(test)
     # Wyświetlamy obraz
-    #plt.imshow(image_array)
+    plt.imshow(test)
 
-    #plt.show()
+    plt.show()
 
     # Zapisujemy dane IDAT w metadanych
     metadata['IDAT'] = len(idat_data)
