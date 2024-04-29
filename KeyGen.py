@@ -2,7 +2,10 @@ import random
 import math
 import zlib
 
-from metadata import read_png_metadata
+from PIL import Image
+import numpy as np
+
+from metadata import read_png_metadata, read_IDAT_chunk
 
 
 class KeyGen:
@@ -79,7 +82,7 @@ class KeyGen:
 
     def generate_prime(self):
         prime_gen = random.randrange((2 ** (self.prime - 1)), (2 ** self.prime))
-        print(f"prime_gen: {prime_gen} ")
+        #print(f"prime_gen: {prime_gen} ")
 
         while not self.isPrime(prime_gen):
             prime_gen = random.randrange((2 ** (self.prime - 1)), (2 ** self.prime))
@@ -152,22 +155,8 @@ class KeyGen:
 #amount_of_bytes_to_substract_from_chunk_size = 1
 #encrypted_chunk_size_in_bytes_substracted = key.keysize // 8 - amount_of_bytes_to_substract_from_chunk_size
 #print(f"encrypted_chunk_size_in_bytes_substracted{encrypted_chunk_size_in_bytes_substracted}  Klucz W BAJTACH = {key.keysize // 8}")
-class RSA:
-    def __init__(self, size, filepath):
-        KEYGEN = KeyGen(size)
-        KEYGEN.Keys_gen()
-        self.public_keys_info = KEYGEN.public_key
-        self.filepath = filepath
 
-        with open(filepath, 'rb') as file:
-            self.file_data = file.read()
-
-        self.metadata, self.Idat = read_png_metadata(filepath)
-        # Blok musi być o n-1 od klucza
-        self.block_bytes_size = size // 8 - 1
-        # Krypto blok musi być takiej samej długości co klucz
-        self.crypto_block_bytes_size = size // 8
-
+'''
     def Electronic_Code_Book_encrypt(self):
         crypto_idat = []
         crypto_junk =[]
@@ -194,7 +183,7 @@ class RSA:
 
 
         return crypto_idat
-
+        
     def create_encrypted_image(self, encrypted_data, output_path):
         try:
             with open(self.filepath, 'rb') as file:
@@ -249,16 +238,194 @@ class RSA:
 
         except Exception as e:
             print("Błąd podczas tworzenia zaszyfrowanego obrazka PNG:", e)
+        
+        
+        
+        '''
+
+""""
+    def ECB_decrypt(self,data):
+        crypto_idat = data
+        decrypto_idat =[]
+        crypto_junk =[]
+        #decompress_idat = zlib.decompress(self.Idat)
+        # Czy zdekompresowane czy nie
+        length_of_crypto_idat = len(data)
+        print("length_of_crypto_idat:",length_of_crypto_idat)
+        print("block_bytes_size:", self.block_bytes_size)
+        print("crypto_block_bytes_size",self.crypto_block_bytes_size)
+        for i in range(0, length_of_crypto_idat, self.crypto_block_bytes_size):
 
 
-file_path = r"C:\Users\PRO\PycharmProjects\emedia-png\pngs\basn6a08.png"
+            raw_block = bytes(data[i:i + self.crypto_block_bytes_size])
+
+            #Liczba^e mod n
+            decryption = pow(int.from_bytes(raw_block, 'big'), self.private_keys_info[0], self.private_keys_info[1])
+            decryption_bytes = decryption.to_bytes(self.crypto_block_bytes_size, 'big')
+
+            if len(decrypto_idat) + self.block_bytes_size > self.length_of_original_idat:
+                decryption_length = self.length_of_original_idat - len(decrypto_idat)
+            else:
+                decryption_length = self.block_bytes_size
+
+            decryption_bytes = decryption.to_bytes(decryption_length, 'big')
+
+            for bytes in decryption_bytes:
+                decrypto_idat.append(bytes)
+            #print("encryption_bytes:",decryption_bytes)
+            #osatni ne przechowuje informacji tylko jest zgodny z kluczem
+            #crypto_idat.append(encryption_bytes[:-1])
+            #crypto_junk.append(encryption_bytes[-1])
+
+
+
+
+        return decrypto_idat"
+    """""
+
+
+
+
+class RSA:
+
+    def __init__(self, size, filepath):
+        KEYGEN = KeyGen(size)
+        KEYGEN.Keys_gen()
+        self.public_keys_info = KEYGEN.public_key
+        self.private_keys_info = KEYGEN.private_key
+        self.filepath = filepath
+
+        with open(filepath, 'rb') as file:
+            self.file_data = file.read()
+
+        self.metadata, self.Idat = read_png_metadata(filepath)
+        # Blok musi być o n-1 od klucza
+        self.block_bytes_size = size // 8 - 1
+        # Krypto blok musi być takiej samej długości co klucz
+        self.crypto_block_bytes_size = size // 8
+
+    def ECB_encrypt(self,data):
+        first_byte = data[:1]
+        #data = data[1:]#pierwszy bajt to filtracja
+        crypto_idat = []
+        crypto_idat_len=[]
+        crypto_junk =[]
+        #decompress_idat = zlib.decompress(self.Idat)
+        #data = zlib.decompress(data)
+        # Czy zdekompresowane czy nie
+        self.length_of_original_idat = len(data)
+        #print("Orginal DATA:", data)
+        #print("Orginal DATA DECopmress:", data)
+        #print("length_of_original_idat:",self.length_of_original_idat)
+        #print("block_bytes_size:", self.block_bytes_size)
+        ##print("crypto_block_bytes_size",self.crypto_block_bytes_size)
+
+        for i in range(0, self.length_of_original_idat, self.block_bytes_size):
+
+            #print("PRZED SZYFR: ", data[i:i + self.block_bytes_size])
+            raw_block = bytes(data[i:i + self.block_bytes_size])
+
+            #Liczba^e mod n
+            encryption = pow(int.from_bytes(raw_block, 'big'), self.public_keys_info[0], self.public_keys_info[1])
+            encryption_bytes = encryption.to_bytes(self.crypto_block_bytes_size, 'big')
+            #print("encryption_bytes:",encryption_bytes)
+            #osatni ne przechowuje informacji tylko jest zgodny z kluczem
+            #crypto_idat.append(encryption_bytes[:-1])
+            #crypto_junk.append(encryption_bytes[-1])
+
+            crypto_idat.append(encryption_bytes)
+            crypto_idat_len.extend(encryption_bytes)
+        #print("crypto_idat:",crypto_idat)
+        #print("Cripto len",len(crypto_idat_len))
+        crypto_idat = b''.join(crypto_idat)
+        return crypto_idat
+
+    def ECB_decrypt(self, data):
+
+        decrypto_idat = []
+        decrypto_bytes = []
+        #print("crypto_block_bytes_size:", self.crypto_block_bytes_size)
+        #data = b''.join(data)
+        length_of_crypto_idat = len(data)
+        #print("length_of_crypto_idat:", length_of_crypto_idat)
+        #print("DATA:", data)
+        for i in range(0, length_of_crypto_idat, self.crypto_block_bytes_size):
+            raw_block = bytes(data[i:i + self.crypto_block_bytes_size])
+            #raw_block = b''.join(data[i:i + self.crypto_block_bytes_size])
+            #print("RAW",raw_block,"LEN", len(raw_block))
+
+            decryption = pow(int.from_bytes(raw_block, 'big'), self.private_keys_info[0], self.private_keys_info[1])
+            #decryption_bytes = decryption.to_bytes(self.block_bytes_size, 'big')
+            #print("LEN DECRIpts",len(decrypto_bytes))
+            #print("LEN ORGINAL ",self.length_of_original_idat)
+            if len(decrypto_bytes) +self.block_bytes_size >= self.length_of_original_idat:
+              # print("NIEDOBOR :",self.length_of_original_idat-len(decrypto_bytes))
+               decryption_bytes = decryption.to_bytes(self.length_of_original_idat-len(decrypto_bytes), 'big')
+
+            else:
+                decryption_bytes = decryption.to_bytes(self.block_bytes_size, 'big')
+
+
+            decrypto_bytes.extend(decryption_bytes)
+           # print("I:", i)
+            decrypto_idat.append(decryption_bytes)
+
+        decrypto_idat = b''.join(decrypto_idat)
+        #print("DECRYpto", decrypto_idat)
+
+        return decrypto_idat
+
+
+
+
+
+file_path = r"C:\Users\PRO\PycharmProjects\emedia-png\pngs\penguin.png"
 file_crypto = r"C:\Users\PRO\PycharmProjects\emedia-png\crypto.png"
-rsa = RSA(128, file_path)
-crypto_data = rsa.Electronic_Code_Book_encrypt()
-key_str = str(rsa.public_keys_info[0])
-print("key lenght",len(key_str))
-rsa.create_encrypted_image(crypto_data, file_crypto)
+rsa = RSA(1024, file_path)
+data = rsa.Idat
+#print("moja",zlib.decompress(data))
+''''
+image = Image.open(file_path)
+#print("moja idat",data)
+print("Tryb kolorów:", image.mode)
+#encodedata = rsa.ECB_encrypt(zlib.decompress(data))
+encodedata = rsa.ECB_encrypt(data)
+encrypted_image_path = "zaszyfrowany_obraz.png"
+#read_IDAT_chunk(encodedata,rsa.metadata)
+encrypted_image = Image.frombytes(image.mode, image.size, encodedata)
+encrypted_image.save(encrypted_image_path)
+decodedata = rsa.ECB_decrypt(encodedata)
+decrypted_image_path = "odszyfrowany_obraz.png"
+decrypted_image = Image.frombytes(image.mode, image.size, decodedata)
+decrypted_image.save(decrypted_image_path)
+'''
 
+image = Image.open(file_path)
+print("Tryb kolorów:", image.mode)
+pixel_data = image.tobytes()
+encrypted_pixels = rsa.ECB_encrypt(pixel_data)
+#print("PIxwele  ", pixel_data)
+encrypted_image = Image.frombytes(image.mode, image.size, encrypted_pixels)
+encrypted_image.show()
+decrypted_pixels = rsa.ECB_decrypt(encrypted_pixels)
+decrypted_image = Image.frombytes(image.mode, image.size, decrypted_pixels)
+decrypted_image.show()
+
+#image = Image.frombytes('RGBA', (width, height), data)
+#image.show()
+#zlibdata = zlib.compress(decodedata)
+#print("Zlib Compressed", zlibdata)
+#crypto_data = rsa.Electronic_Code_Book_encrypt()
+#key_str = str(rsa.public_keys_info[0])
+#print("key lenght",len(key_str))
+
+
+
+
+#rsa.create_encrypted_image(crypto_data, file_crypto)
+#text = b'WitamJaksiemASZasdwasdwadsawdsadawdaergaergeargfadbv'
+#encode = rsa.ECB_encrypt(text)
+#decode = rsa.ECB_decrypt(encode)
 
 #print(zlib)# w bytes
 
