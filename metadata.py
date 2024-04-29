@@ -131,29 +131,29 @@ def read_png_metadata(file_path):
 
     #idat_data = zlib.decompress(idat_data)
 
-    metadata = read_IDAT_chunk(idat_data, metadata)
+    metadata,recon = read_IDAT_chunk(idat_data, metadata)
 
-    return metadata, idat_data
+    return metadata, idat_data,recon
 
 
 def apply_palette(Recon, metadata):
-    """Replace indexed pixels in parsed IDAT with corresponding palette RGB values"""
+
     print('Applying palette')
 
-    # Sprawdź, czy istnieje paleta PLTE w metadanych
+    #  czy istnieje paleta PLTE w metadanych
     if 'PLTE' not in metadata:
         print("PLTE chunk not found.")
         return
 
-    # Pobierz paletę RGB z metadanych
+    #  paletę RGB z metadanych
     palette = metadata['PLTE']['palette']
 
-    # Sprawdź, czy dane IDAT zostały wcześniej przetworzone
+    #  czy dane IDAT zostały wcześniej przetworzone
     if Recon is None:
         print("No data to apply palette.")
         return
 
-    # Aplikuj paletę do danych IDAT (Recon)
+    #  paletę do danych IDAT (Recon)
     applied_palette_data = bytearray()
     for pixel in Recon:
         try:
@@ -231,23 +231,28 @@ def read_IDAT_chunk(idat_data, metadata):
             Recon.append(Recon_x & 0xff)  # przycinanie do bajtu
 
     image_array = np.array(Recon).reshape((height, width, bytes_per_pixel))
-    print(image_array)
+    reconstruct = Recon
+    #print(image_array)
    # print(len(Recon))
-    test = apply_palette(Recon, metadata)
-    #print(len(test))
-    test = np.array(test).reshape((height, width, 3))
-    #print(test)
-    # Wyświetlamy obraz
-    plt.imshow(test)
+    if 'PLTE' in metadata:
+        print("tu")
+        test = apply_palette(Recon, metadata)
 
-    plt.show()
+        reconstruct = test
+        test = np.array(test).reshape((height, width, 3))
+        #reconstruct = test
+        #print(reconstruct)
+        plt.imshow(test)
+    else:
+        plt.imshow(image_array)
+    #plt.show()
 
     # Zapisujemy dane IDAT w metadanych
     metadata['IDAT'] = len(idat_data)
 
     # Zwracamy metadane
     #return metadata
-    return metadata
+    return metadata,reconstruct
 
 
 def calculate_bytes_per_pixel(metadata):

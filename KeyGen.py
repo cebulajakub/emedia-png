@@ -4,6 +4,7 @@ import zlib
 
 from PIL import Image
 import numpy as np
+from matplotlib import pyplot as plt
 
 from metadata import read_png_metadata, read_IDAT_chunk
 
@@ -298,7 +299,9 @@ class RSA:
         with open(filepath, 'rb') as file:
             self.file_data = file.read()
 
-        self.metadata, self.Idat = read_png_metadata(filepath)
+        self.metadata, self.Idat, self.recon = read_png_metadata(filepath)
+
+
         # Blok musi być o n-1 od klucza
         self.block_bytes_size = size // 8 - 1
         # Krypto blok musi być takiej samej długości co klucz
@@ -306,7 +309,7 @@ class RSA:
 
     def ECB_encrypt(self,data):
         first_byte = data[:1]
-        #data = data[1:]#pierwszy bajt to filtracja
+        data = data[1:]#pierwszy bajt to filtracja
         crypto_idat = []
         crypto_idat_len=[]
         crypto_junk =[]
@@ -338,6 +341,8 @@ class RSA:
         #print("crypto_idat:",crypto_idat)
         #print("Cripto len",len(crypto_idat_len))
         crypto_idat = b''.join(crypto_idat)
+        crypto_idat = int.from_bytes(crypto_idat, 'big'),
+
         return crypto_idat
 
     def ECB_decrypt(self, data):
@@ -371,7 +376,7 @@ class RSA:
             decrypto_idat.append(decryption_bytes)
 
         decrypto_idat = b''.join(decrypto_idat)
-        #print("DECRYpto", decrypto_idat)
+        print("DECRYpto", decrypto_idat)
 
         return decrypto_idat
 
@@ -379,10 +384,27 @@ class RSA:
 
 
 
-file_path = r"C:\Users\PRO\PycharmProjects\emedia-png\pngs\penguin.png"
+file_path = r"C:\Users\PRO\PycharmProjects\emedia-png\pngs\basn6a08.png"
 file_crypto = r"C:\Users\PRO\PycharmProjects\emedia-png\crypto.png"
 rsa = RSA(1024, file_path)
 data = rsa.Idat
+recon = rsa.recon
+print("Orginal :", recon)
+encodedata = rsa.ECB_encrypt(recon)
+
+#print(f"Image size: {image.size}")
+#print(f"Image Mode:{image.mode}")
+print("Encoded :", encodedata)
+image_array = np.array(encodedata).reshape((rsa.metadata['IHDR']['height'], rsa.metadata['IHDR']['width'], 3))
+
+plt.imshow(image_array)
+plt.show()
+#decodedata = rsa.ECB_decrypt(encodedata)
+#decrypted_image = Image.frombytes('RGB', image.size, decodedata)
+#plt.imshow(decrypted_image)
+#plt.show()
+
+
 #print("moja",zlib.decompress(data))
 ''''
 image = Image.open(file_path)
@@ -400,17 +422,18 @@ decrypted_image = Image.frombytes(image.mode, image.size, decodedata)
 decrypted_image.save(decrypted_image_path)
 '''
 
+'''''
 image = Image.open(file_path)
 print("Tryb kolorów:", image.mode)
 pixel_data = image.tobytes()
 encrypted_pixels = rsa.ECB_encrypt(pixel_data)
 #print("PIxwele  ", pixel_data)
-encrypted_image = Image.frombytes(image.mode, image.size, encrypted_pixels)
+encrypted_image = Image.frombytes('RGB', image.size, encrypted_pixels)
 encrypted_image.show()
 decrypted_pixels = rsa.ECB_decrypt(encrypted_pixels)
 decrypted_image = Image.frombytes(image.mode, image.size, decrypted_pixels)
 decrypted_image.show()
-
+'''''
 #image = Image.frombytes('RGBA', (width, height), data)
 #image.show()
 #zlibdata = zlib.compress(decodedata)
