@@ -6,7 +6,7 @@ from PIL import Image
 import numpy as np
 from matplotlib import pyplot as plt
 
-from metadata import read_png_metadata, read_IDAT_chunk
+from metadata import read_png_metadata, read_IDAT_chunk, calculate_bytes_per_pixel
 
 
 class KeyGen:
@@ -306,13 +306,14 @@ class RSA:
         self.block_bytes_size = size // 8 - 1
         # Krypto blok musi być takiej samej długości co klucz
         self.crypto_block_bytes_size = size // 8
+        #jezeli dam 4 to dekodowa  wyswietla sie tak jakbym chail nkodowac XDDD
 
     def ECB_encrypt(self,data):
-        first_byte = data[:1]
-        data = data[1:]#pierwszy bajt to filtracja
+
+        #data = data[1:]#pierwszy bajt to filtracja
         crypto_idat = []
         crypto_idat_len=[]
-        crypto_junk =[]
+        crypto_to_view =[]
         #decompress_idat = zlib.decompress(self.Idat)
         #data = zlib.decompress(data)
         # Czy zdekompresowane czy nie
@@ -337,13 +338,14 @@ class RSA:
             #crypto_junk.append(encryption_bytes[-1])
 
             crypto_idat.append(encryption_bytes)
+            crypto_to_view.append(encryption_bytes[:-1])
+
             crypto_idat_len.extend(encryption_bytes)
         #print("crypto_idat:",crypto_idat)
         #print("Cripto len",len(crypto_idat_len))
         crypto_idat = b''.join(crypto_idat)
-        crypto_idat = int.from_bytes(crypto_idat, 'big'),
-
-        return crypto_idat
+        crypto_to_view = b''.join(crypto_to_view)
+        return crypto_idat, crypto_to_view
 
     def ECB_decrypt(self, data):
 
@@ -384,34 +386,61 @@ class RSA:
 
 
 
-file_path = r"C:\Users\PRO\PycharmProjects\emedia-png\pngs\basn6a08.png"
+file_path = r"C:\Users\PRO\PycharmProjects\emedia-png\pngs\drag.png"
 file_crypto = r"C:\Users\PRO\PycharmProjects\emedia-png\crypto.png"
 rsa = RSA(1024, file_path)
 data = rsa.Idat
 recon = rsa.recon
-print("Orginal :", recon)
-encodedata = rsa.ECB_encrypt(recon)
+#print("RECON ", recon)
+#print(len(recon))
+recon = bytes(recon)
+
+siz = (rsa.metadata['IHDR']['width'],rsa.metadata['IHDR']['height'])
+image = Image.frombytes('RGBA',siz, recon)
+plt.imshow(image)
+plt.show()
+
+#print("RECON Bytes ", recon)
+encodedata , enc_to_view= rsa.ECB_encrypt(recon)
+
+image = Image.frombytes('RGBA', siz, enc_to_view)
+plt.imshow(image)
+plt.show()
+
+#image = Image.frombytes('RGBA', siz, encodedata)
+#plt.imshow(image)
+#plt.show()
+
+decodedata = rsa.ECB_decrypt(encodedata)
+decrypted_image = Image.frombytes('RGBA', siz, decodedata)
+plt.imshow(decrypted_image)
+plt.show()
+
+
+
+
 
 #print(f"Image size: {image.size}")
 #print(f"Image Mode:{image.mode}")
-print("Encoded :", encodedata)
-image_array = np.array(encodedata).reshape((rsa.metadata['IHDR']['height'], rsa.metadata['IHDR']['width'], 3))
 
-plt.imshow(image_array)
+'''''
+image = Image.open(file_path)
+encrypted_image = Image.frombytes('RGB', image.size, encodedata) # Utwórz nowy obraz w skali szarości
+plt.imshow(encrypted_image)
 plt.show()
-#decodedata = rsa.ECB_decrypt(encodedata)
-#decrypted_image = Image.frombytes('RGB', image.size, decodedata)
-#plt.imshow(decrypted_image)
-#plt.show()
-
+decodedata = rsa.ECB_decrypt(encodedata)
+decrypted_image = Image.frombytes('RGB', image.size, decodedata)
+plt.imshow(decrypted_image)
+plt.show()
+'''''
 
 #print("moja",zlib.decompress(data))
-''''
+"""""
 image = Image.open(file_path)
 #print("moja idat",data)
 print("Tryb kolorów:", image.mode)
-#encodedata = rsa.ECB_encrypt(zlib.decompress(data))
-encodedata = rsa.ECB_encrypt(data)
+encodedata = rsa.ECB_encrypt(zlib.decompress(data))
+#encodedata = rsa.ECB_encrypt(data)
 encrypted_image_path = "zaszyfrowany_obraz.png"
 #read_IDAT_chunk(encodedata,rsa.metadata)
 encrypted_image = Image.frombytes(image.mode, image.size, encodedata)
@@ -420,7 +449,7 @@ decodedata = rsa.ECB_decrypt(encodedata)
 decrypted_image_path = "odszyfrowany_obraz.png"
 decrypted_image = Image.frombytes(image.mode, image.size, decodedata)
 decrypted_image.save(decrypted_image_path)
-'''
+"""""
 
 '''''
 image = Image.open(file_path)
