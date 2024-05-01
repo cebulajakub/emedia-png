@@ -195,6 +195,7 @@ def read_IDAT_chunk(idat_data, metadata):
     # Dekompresujemy dane IDAT
     #print("BEFORE ZLIB:", idat_data)
     decompressed_idat_data = zlib.decompress(idat_data)
+    #print("Decompressed IDAT", decompressed_idat_data)
     #print("AFTER ZLIB : ",decompressed_idat_data)
     #print("COMPRESSING:", zlib.compress(decompressed_idat_data))
     #print("HIHI :")
@@ -233,7 +234,7 @@ def read_IDAT_chunk(idat_data, metadata):
     image_array = np.array(Recon).reshape((height, width, bytes_per_pixel))
     reconstruct = Recon
     #print(image_array)
-   # print(len(Recon))
+
     if 'PLTE' in metadata:
         print("tu")
         test = apply_palette(Recon, metadata)

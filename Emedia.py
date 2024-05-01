@@ -13,7 +13,7 @@ if __name__ == "__main__":
     # file_path = r"C:\Users\Jakub\Desktop\EMEDIA\emedia-png\pngs\itxt.png" # Ścieżka do pliku PNG
     # file_path_xml = r"C:\Users\Jakub\Desktop\EMEDIA\emedia-png\pngs\metadane.xml"
     # file_path_copy = r"C:\Users\Jakub\Desktop\EMEDIA\emedia-png\pngs\copy.png"
-    file_path = r"C:\Users\PRO\PycharmProjects\emedia-png\pngs\penguin.png"
+    file_path = r"C:\Users\PRO\PycharmProjects\emedia-png\pngs\basn6a08.png"
     file_path_xml = r"C:\Users\PRO\PycharmProjects\emedia-png\pngs\metadane.xml"
     file_path_copy = r"C:\Users\PRO\PycharmProjects\emedia-png\pngs\copy.png"
 
@@ -29,7 +29,7 @@ if __name__ == "__main__":
     image = fin.read()
     fin.close()
     image = bytearray(image)
-    metadata, idat = read_png_metadata(file_path)
+    metadata, idat, tmp = read_png_metadata(file_path)
     if metadata:
         print("Metadane PNG:")
         for key, value in metadata.items():
