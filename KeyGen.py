@@ -291,7 +291,16 @@ class RSA:
 
             plaintex_block = int.from_bytes(ciphertext_block, 'big') ^ decryption
             #plaintex_block = decryption ^ int.from_bytes(ciphertext_block, 'big')
-            dencryption_bytes = plaintex_block.to_bytes(self.crypto_block_bytes_size, 'big')
+
+            if len(decrypto_bytes) + self.crypto_block_bytes_size >= self.length_of_original_idat:
+                print("NIEDOBOR :",self.length_of_original_idat-len(decrypto_bytes))
+                dencryption_bytes = plaintex_block.to_bytes(self.length_of_original_idat - len(decrypto_bytes), 'big')
+
+            else:
+
+                dencryption_bytes = plaintex_block.to_bytes(self.crypto_block_bytes_size, 'big')
+
+
             #print('decrypto block petla : ' + str(len(dencryption_bytes)))
            # print('decrypto block  : ' + str(dencryption_bytes))
             decrypto_bytes.extend(dencryption_bytes)
@@ -355,28 +364,31 @@ class RSA:
         return encryptor.update(data)
 
 
-file_path = r"C:\Users\PRO\PycharmProjects\emedia-png\pngs\penguin.png"
+file_path = r"C:\Users\PRO\PycharmProjects\emedia-png\pngs\2x2.png"
 file_crypto = r"C:\Users\PRO\PycharmProjects\emedia-png\crypto.png"
-rsa = RSA(256, file_path)
+rsa = RSA(128, file_path)
 data = rsa.Idat
 recon = rsa.recon
 plt.clf()
-tekst = "SiemaEniuDobryZa1616161616161616"
-tekst = bytes(tekst, 'utf-8')
-print("Tekst W bajtach",tekst)
-#
+# tekst = "SiemaEniuDobryZa1616161616161616"
+# tekst = bytes(tekst, 'utf-8')
+
 # T ,t= rsa.ECB_encrypt(tekst)
 # print(T)
 # TE = rsa.ECB_decrypt(T)
 # print(TE)
-C = rsa.CTR_encrypt(tekst)
-print(C)
-print(" ")
-
-CE = rsa.CTR_decrypt(C)
-print(CE)
 #
-# recon = bytes(recon)
+# print("Tekst W bajtach",tekst)
+# #
+#
+# C = rsa.CTR_encrypt(tekst)
+# print(C)
+# print(" ")
+
+# CE = rsa.CTR_decrypt(C)
+# print(CE)
+
+recon = bytes(recon)
 
 siz = (rsa.metadata['IHDR']['width'], rsa.metadata['IHDR']['height'])
 
@@ -400,7 +412,7 @@ decodedata = rsa.ECB_decrypt(encodedata)
 decrypted_image = Image.frombytes('RGB', siz, decodedata)
 plt.imshow(decrypted_image)
 plt.show()
-
+print("Decode ECB ",decodedata)
 
 #
 CTR = rsa.CTR_encrypt(recon)
@@ -410,6 +422,7 @@ plt.show()
 plt.clf()
 #
 DCTR = rsa.CTR_decrypt(CTR)
+print("Decode CTR ",DCTR)
 imageDCTR = Image.frombytes('RGB',siz, DCTR)
 plt.imshow(imageDCTR)
 plt.show()
