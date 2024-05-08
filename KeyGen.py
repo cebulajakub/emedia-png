@@ -364,9 +364,9 @@ class RSA:
         return encryptor.update(data)
 
 
-file_path = r"C:\Users\PRO\PycharmProjects\emedia-png\pngs\2x2.png"
+file_path = r"C:\Users\PRO\PycharmProjects\emedia-png\pngs\penguin.png"
 file_crypto = r"C:\Users\PRO\PycharmProjects\emedia-png\crypto.png"
-rsa = RSA(128, file_path)
+rsa = RSA(512, file_path)
 data = rsa.Idat
 recon = rsa.recon
 plt.clf()
