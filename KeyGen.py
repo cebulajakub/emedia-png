@@ -1,10 +1,12 @@
 import os
 import random
+from collections import deque
+
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.asymmetric import padding
-
+from Crypto.PublicKey import RSA as RSAA
 import math
 import zlib
 
@@ -14,6 +16,7 @@ from cryptography.hazmat.primitives.ciphers import Cipher
 from cryptography.hazmat.primitives.ciphers.algorithms import AES
 from cryptography.hazmat.primitives.ciphers.modes import ECB
 from matplotlib import pyplot as plt
+import png
 
 from metadata import read_png_metadata, read_IDAT_chunk, calculate_bytes_per_pixel
 
@@ -219,6 +222,7 @@ class RSA:
         # print("Cripto len",len(crypto_idat_len))
         crypto_idat = b''.join(crypto_idat)
         crypto_to_view = b''.join(crypto_to_view)
+
         return crypto_idat, crypto_to_view
 
         # Szyfrujemy licznik dodajemy do niego sól na poczatku a pożniej wykonujemy operacje XOR plaintexta z licznikiem
@@ -253,12 +257,23 @@ class RSA:
             #print("ciphertext" + str(encryption_bytes))
            # print("cipher ken " + str(len(encryption_bytes)))
             crypto_idat.append(encryption_bytes)
-            counter += 1
-
             crypto_idat_len.extend(encryption_bytes)
 
-        crypto_idat = b''.join(crypto_idat)
 
+            counter += 1
+
+           # print(len(crypto_idat))
+
+
+            if len(crypto_idat_len) + self.crypto_block_bytes_size >= self.length_of_original_idat:
+                    print("Cryptographic")
+                    print(len(crypto_idat_len))
+                    print(self.length_of_original_idat)
+                    print(self.crypto_block_bytes_size)
+            #crypto_idat_len.extend(encryption_bytes)
+
+        crypto_idat = b''.join(crypto_idat)
+        #print(len(crypto_idat))
         # Dodajemy asercję sprawdzającą rozmiar bloku
         #assert len(crypto_idat) == self.length_of_original_idat, "Encrypted data length mismatch"
 
@@ -311,8 +326,7 @@ class RSA:
 
         decrypto_idat = b''.join(decrypto_idat)
 
-        # Dodajemy asercję sprawdzającą rozmiar bloku
-        #assert len(decrypto_idat) == self.length_of_original_idat, "Decrypted data length mismatch"
+
 
         return decrypto_idat
 
@@ -344,7 +358,7 @@ class RSA:
                 decryption_bytes = decryption.to_bytes(self.block_bytes_size, 'big')
 
             decrypto_bytes.extend(decryption_bytes)
-            # print("I:", i)
+            #print("I:", i)
             decrypto_idat.append(decryption_bytes)
 
         decrypto_idat = b''.join(decrypto_idat)
@@ -363,13 +377,48 @@ class RSA:
 
         return encryptor.update(data)
 
+    def Save_Png_Idat_lenght(self, data_to_view):
+        print("data_to_view", len(data_to_view))
+        print("Orginal ",self.length_of_original_idat)
+       # print("data_to_view", data_to_view)
 
-file_path = r"C:\Users\PRO\PycharmProjects\emedia-png\pngs\penguin.png"
+        idat = []
+
+        for i in range(self.length_of_original_idat):
+
+            idat.append(data_to_view[i])
+
+        return idat
+
+
+
+
+file_path = r"C:\Users\PRO\PycharmProjects\emedia-png\pngs\dice.png"
 file_crypto = r"C:\Users\PRO\PycharmProjects\emedia-png\crypto.png"
-rsa = RSA(512, file_path)
+rsa = RSA(256, file_path)
 data = rsa.Idat
 recon = rsa.recon
+
+key_lib = RSAA.construct(rsa.public_keys_info,rsa.private_keys_info)
+
 plt.clf()
+byte_per_pix = calculate_bytes_per_pixel(rsa.metadata)
+if byte_per_pix == 1:
+    byte_per_pix = 3
+print("Byte per pixel ",byte_per_pix)
+print("colour type", rsa.metadata['IHDR']['color_type'])
+print("Bit depth", rsa.metadata['IHDR']['bit_depth'])
+
+
+png_write = png.Writer(rsa.metadata['IHDR']['width'], rsa.metadata['IHDR']['height'], greyscale=False,alpha = True )
+
+bytes_row_width = rsa.metadata['IHDR']['width'] * byte_per_pix
+#pixels_grouped_by_rows = [recon[i: i + bytes_row_width] for i in range(0, len(recon), bytes_row_width)]
+#f = open(file_crypto, 'wb')
+#png_write.write(f, pixels_grouped_by_rows)
+#f.close()
+
+
 # tekst = "SiemaEniuDobryZa1616161616161616"
 # tekst = bytes(tekst, 'utf-8')
 
@@ -389,43 +438,76 @@ plt.clf()
 # print(CE)
 
 recon = bytes(recon)
+#print("IDAT " + str(data) + "size " + str(len(data)))
+#print("No compress " + str(recon) + "size " + str(len(recon)))
+
+
 
 siz = (rsa.metadata['IHDR']['width'], rsa.metadata['IHDR']['height'])
 
-image = Image.frombytes('RGB',siz, recon)
+image = Image.frombytes('RGBA',siz, recon)
 plt.imshow(image)
 plt.show()
 
 
 
-encodedata, enc_to_view = rsa.ECB_encrypt(recon)
 
-imageECB = Image.frombytes('RGB', siz, enc_to_view)
+
+
+
+encodedata, enc_to_view = rsa.ECB_encrypt(recon)
+#print(enc_to_view)
+
+imageECB = Image.frombytes('RGBA', siz, enc_to_view)
 plt.imshow(imageECB)
 plt.show()
 plt.clf()
+# idata = rsa.Save_Png_Idat_lenght(enc_to_view)
+# pixels_grouped_by_rows = [idata[i: i + bytes_row_width] for i in range(0, len(idata), bytes_row_width)]
+# f = open(file_crypto, 'wb')
+# png_write.write(f, pixels_grouped_by_rows)
+#
+# f.close()
+# idata = rsa.Save_Png_Idat_lenght(enc_to_view)
+# pixels_grouped_by_rows = [idata[i: i + bytes_row_width] for i in range(0, len(idata), bytes_row_width)]
+# f = open(file_crypto, 'wb')
+# png_write.write(f, pixels_grouped_by_rows)
+#
+# f.close()
 
-
-
-
-decodedata = rsa.ECB_decrypt(encodedata)
-decrypted_image = Image.frombytes('RGB', siz, decodedata)
-plt.imshow(decrypted_image)
-plt.show()
-print("Decode ECB ",decodedata)
 
 #
+# decodedata = rsa.ECB_decrypt(encodedata)
+# decrypted_image = Image.frombytes('RGB', siz, decodedata)
+# plt.imshow(decrypted_image)
+# plt.show()
+
+#print("Decode ECB ",decodedata)
+#
+# #
 CTR = rsa.CTR_encrypt(recon)
 imageCTR = Image.frombytes('RGB',siz, CTR)
 plt.imshow(imageCTR)
 plt.show()
+idata = rsa.Save_Png_Idat_lenght(CTR)
+pixels_grouped_by_rows = [idata[i: i + bytes_row_width] for i in range(0, len(idata), bytes_row_width)]
+f = open(file_crypto, 'wb')
+png_write.write(f, pixels_grouped_by_rows)
+
+f.close()
 plt.clf()
+# idata = rsa.Save_Png_Idat_lenght(CTR)
+# pixels_grouped_by_rows = [idata[i: i + bytes_row_width] for i in range(0, len(idata), bytes_row_width)]
+# f = open(file_crypto, 'wb')
+# png_write.write(f, pixels_grouped_by_rows)
 #
-DCTR = rsa.CTR_decrypt(CTR)
-print("Decode CTR ",DCTR)
-imageDCTR = Image.frombytes('RGB',siz, DCTR)
-plt.imshow(imageDCTR)
-plt.show()
+# f.close()
+# #
+# DCTR = rsa.CTR_decrypt(CTR)
+# print("Decode CTR ",DCTR)
+# imageDCTR = Image.frombytes('RGB',siz, DCTR)
+# plt.imshow(imageDCTR)
+# plt.show()
 
 #
 #

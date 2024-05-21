@@ -163,8 +163,7 @@ def apply_palette(Recon, metadata):
             else:
 
                 print("Invalid palette index:", pixel_index)
-                # Wybierz domyślną wartość w przypadku nieprawidłowego indeksu
-                applied_palette_data.extend(bytes([0, 0, 0]))  # Możesz wybrać inną domyślną wartość
+                applied_palette_data.extend(bytes([0, 0, 0]))
         except ValueError:
             print("Invalid pixel value:", pixel)
 

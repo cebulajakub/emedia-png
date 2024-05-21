@@ -13,7 +13,7 @@ if __name__ == "__main__":
     # file_path = r"C:\Users\Jakub\Desktop\EMEDIA\emedia-png\pngs\itxt.png" # Ścieżka do pliku PNG
     # file_path_xml = r"C:\Users\Jakub\Desktop\EMEDIA\emedia-png\pngs\metadane.xml"
     # file_path_copy = r"C:\Users\Jakub\Desktop\EMEDIA\emedia-png\pngs\copy.png"
-    file_path = r"C:\Users\PRO\PycharmProjects\emedia-png\pngs\basn6a08.png"
+    file_path = r"C:\Users\PRO\PycharmProjects\emedia-png\pngs\a.png"
     file_path_xml = r"C:\Users\PRO\PycharmProjects\emedia-png\pngs\metadane.xml"
     file_path_copy = r"C:\Users\PRO\PycharmProjects\emedia-png\pngs\copy.png"
 
@@ -23,7 +23,7 @@ if __name__ == "__main__":
 
     # get_decompressed_idat_data(file_path)
 
-    #furier_trans_pngg(file_path, 50)
+    furier_trans_pngg(file_path, 50)
 
     fin = open(input_file_path, 'rb')
     image = fin.read()
