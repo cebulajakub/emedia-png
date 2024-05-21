@@ -6,7 +6,7 @@ from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.asymmetric import padding
-from Crypto.PublicKey import RSA as RSAA
+
 import math
 import zlib
 
@@ -184,49 +184,59 @@ class RSA:
         # Krypto blok musi być takiej samej długości co klucz
         self.crypto_block_bytes_size = size // 8
 
+    
+    
     def ECB_encrypt(self, data):
-
-        # data = data[1:]#pierwszy bajt to filtracja
         crypto_idat = []
         crypto_idat_len = []
         crypto_to_view = []
-        # decompress_idat = zlib.decompress(self.Idat)
-        # data = zlib.compress(data)
-        # Czy zdekompresowane czy nie
+        added_zeros = [] 
         self.length_of_original_idat = len(data)
 
-        # print("Orginal DATA:", data)
-        # print("Orginal DATA DECopmress:", data)
-        # print("length_of_original_idat:",self.length_of_original_idat)
-        # print("block_bytes_size:", self.block_bytes_size)
-        ##print("crypto_block_bytes_size",self.crypto_block_bytes_size)
-
         for i in range(0, self.length_of_original_idat, self.block_bytes_size):
-            # print("PRZED SZYFR: ", data[i:i + self.block_bytes_size])
             raw_block = bytes(data[i:i + self.block_bytes_size])
 
-            # Liczba^e mod n
             encryption = pow(int.from_bytes(raw_block, 'big'), self.public_keys_info[0], self.public_keys_info[1])
-            #print(" IV POW " + str(encryption))
             encryption_bytes = encryption.to_bytes(self.crypto_block_bytes_size, 'big')
-            # print("encryption_bytes:",encryption_bytes)
-            # osatni ne przechowuje informacji tylko jest zgodny z kluczem
-            # crypto_idat.append(encryption_bytes[:-1])
-            # crypto_junk.append(encryption_bytes[-1])
 
             crypto_idat.append(encryption_bytes)
             crypto_to_view.append(encryption_bytes[:-1])
 
             crypto_idat_len.extend(encryption_bytes)
-        # print("crypto_idat:",crypto_idat)
-        # print("Cripto len",len(crypto_idat_len))
+
+            added_zeros.append(b'\x00')
+
+
+   
+        last_block_padding = (self.block_bytes_size - (self.length_of_original_idat % self.block_bytes_size)) % self.block_bytes_size
+        if last_block_padding > 0:
+            added_zeros.extend([b'\x00'] * last_block_padding)
+
         crypto_idat = b''.join(crypto_idat)
         crypto_to_view = b''.join(crypto_to_view)
+        added_zeros = b''.join(added_zeros) 
 
-        return crypto_idat, crypto_to_view
-
+        return crypto_idat, crypto_to_view, added_zeros
         # Szyfrujemy licznik dodajemy do niego sól na poczatku a pożniej wykonujemy operacje XOR plaintexta z licznikiem
         # plaintekst moze miec ta sama dlugosc co klucz
+
+    def merge_crypto_to_view_and_zeros(self, added_zeros):
+        merged_data = []
+        num_blocks = len(self.Idat) // self.block_bytes_size
+        added_zeros_index = 0
+
+        for i in range(num_blocks):
+            start = i * self.block_bytes_size
+            end = start + self.block_bytes_size
+            merged_data.append(self.Idat[start:end])
+            merged_data.append(added_zeros[added_zeros_index:added_zeros_index + 1])
+            added_zeros_index += 1
+
+        if added_zeros_index < len(added_zeros):
+            merged_data.append(added_zeros[added_zeros_index:])
+
+        return b''.join(merged_data)
+
 
     def CTR_encrypt(self, data):
         self.salt = random.getrandbits(self.size // 2)
@@ -393,13 +403,15 @@ class RSA:
 
 
 
-file_path = r"C:\Users\PRO\PycharmProjects\emedia-png\pngs\dice.png"
-file_crypto = r"C:\Users\PRO\PycharmProjects\emedia-png\crypto.png"
+#file_path = r"C:\Users\PRO\PycharmProjects\emedia-png\pngs\dice.png"
+#file_crypto = r"C:\Users\PRO\PycharmProjects\emedia-png\crypto.png"
+file_path = r"C:\Users\Jakub\Desktop\EMEDIA\emedia-png\pngs\2x2.png"
+file_crypto = r"C:\Users\Jakub\Desktop\EMEDIA\emedia-png\pngs\crypto.png"
 rsa = RSA(256, file_path)
 data = rsa.Idat
 recon = rsa.recon
 
-key_lib = RSAA.construct(rsa.public_keys_info,rsa.private_keys_info)
+#key_lib = RSAA.construct(rsa.public_keys_info,rsa.private_keys_info)
 
 plt.clf()
 byte_per_pix = calculate_bytes_per_pixel(rsa.metadata)
@@ -410,7 +422,7 @@ print("colour type", rsa.metadata['IHDR']['color_type'])
 print("Bit depth", rsa.metadata['IHDR']['bit_depth'])
 
 
-png_write = png.Writer(rsa.metadata['IHDR']['width'], rsa.metadata['IHDR']['height'], greyscale=False,alpha = True )
+png_write = png.Writer(rsa.metadata['IHDR']['width'], rsa.metadata['IHDR']['height'], greyscale=False,alpha = False )
 
 bytes_row_width = rsa.metadata['IHDR']['width'] * byte_per_pix
 #pixels_grouped_by_rows = [recon[i: i + bytes_row_width] for i in range(0, len(recon), bytes_row_width)]
@@ -445,7 +457,7 @@ recon = bytes(recon)
 
 siz = (rsa.metadata['IHDR']['width'], rsa.metadata['IHDR']['height'])
 
-image = Image.frombytes('RGBA',siz, recon)
+image = Image.frombytes('RGB',siz, recon)
 plt.imshow(image)
 plt.show()
 
@@ -455,19 +467,19 @@ plt.show()
 
 
 
-encodedata, enc_to_view = rsa.ECB_encrypt(recon)
+encodedata, enc_to_view, zeros = rsa.ECB_encrypt(recon)
 #print(enc_to_view)
 
-imageECB = Image.frombytes('RGBA', siz, enc_to_view)
+imageECB = Image.frombytes('RGB', siz, enc_to_view)
 plt.imshow(imageECB)
 plt.show()
 plt.clf()
-# idata = rsa.Save_Png_Idat_lenght(enc_to_view)
-# pixels_grouped_by_rows = [idata[i: i + bytes_row_width] for i in range(0, len(idata), bytes_row_width)]
-# f = open(file_crypto, 'wb')
-# png_write.write(f, pixels_grouped_by_rows)
-#
-# f.close()
+idata = rsa.Save_Png_Idat_lenght(enc_to_view)
+pixels_grouped_by_rows = [idata[i: i + bytes_row_width] for i in range(0, len(idata), bytes_row_width)]
+f = open(file_crypto, 'wb')
+png_write.write(f, pixels_grouped_by_rows)
+f.write(zeros)
+f.close()
 # idata = rsa.Save_Png_Idat_lenght(enc_to_view)
 # pixels_grouped_by_rows = [idata[i: i + bytes_row_width] for i in range(0, len(idata), bytes_row_width)]
 # f = open(file_crypto, 'wb')
@@ -485,17 +497,17 @@ plt.clf()
 #print("Decode ECB ",decodedata)
 #
 # #
-CTR = rsa.CTR_encrypt(recon)
-imageCTR = Image.frombytes('RGB',siz, CTR)
-plt.imshow(imageCTR)
-plt.show()
-idata = rsa.Save_Png_Idat_lenght(CTR)
-pixels_grouped_by_rows = [idata[i: i + bytes_row_width] for i in range(0, len(idata), bytes_row_width)]
-f = open(file_crypto, 'wb')
-png_write.write(f, pixels_grouped_by_rows)
+#CTR = rsa.CTR_encrypt(recon)
+#imageCTR = Image.frombytes('RGB',siz, CTR)
+#plt.imshow(imageCTR)
+#plt.show()
+#idata = rsa.Save_Png_Idat_lenght(CTR)
+#pixels_grouped_by_rows = [idata[i: i + bytes_row_width] for i in range(0, len(idata), bytes_row_width)]
+#f = open(file_crypto, 'wb')
+#png_write.write(f, pixels_grouped_by_rows)
 
-f.close()
-plt.clf()
+#f.close()
+#plt.clf()
 # idata = rsa.Save_Png_Idat_lenght(CTR)
 # pixels_grouped_by_rows = [idata[i: i + bytes_row_width] for i in range(0, len(idata), bytes_row_width)]
 # f = open(file_crypto, 'wb')
