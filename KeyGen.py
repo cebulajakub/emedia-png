@@ -393,12 +393,15 @@ class RSA:
        # print("data_to_view", data_to_view)
 
         idat = []
-
+        missing_idat = []
         for i in range(self.length_of_original_idat):
 
             idat.append(data_to_view[i])
 
-        return idat
+        missing_idat = data_to_view[self.length_of_original_idat:]
+        print(missing_idat)
+        print(len(missing_idat))
+        return idat, missing_idat
 
 
 
@@ -474,10 +477,11 @@ imageECB = Image.frombytes('RGB', siz, enc_to_view)
 plt.imshow(imageECB)
 plt.show()
 plt.clf()
-idata = rsa.Save_Png_Idat_lenght(enc_to_view)
+idata, missing_idat = rsa.Save_Png_Idat_lenght(enc_to_view)
 pixels_grouped_by_rows = [idata[i: i + bytes_row_width] for i in range(0, len(idata), bytes_row_width)]
 f = open(file_crypto, 'wb')
 png_write.write(f, pixels_grouped_by_rows)
+f.write(missing_idat)
 f.write(zeros)
 f.close()
 # idata = rsa.Save_Png_Idat_lenght(enc_to_view)
