@@ -6,7 +6,7 @@ from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.asymmetric import padding
-from Crypto.PublicKey import RSA as RSAA
+
 import math
 import zlib
 
@@ -164,15 +164,19 @@ class KeyGen:
 # ograniczenie na długość bloku
 class RSA:
 
-    def __init__(self, size, filepath):
+    def __init__(self, size, filepath, key=None):
 
-        KEYGEN = KeyGen(size)
-        KEYGEN.Keys_gen()
-        self.size = size
-        self.public_keys_info = KEYGEN.public_key
-        self.private_keys_info = KEYGEN.private_key
+        if key is None:
+            # Tworzenie klucza, jeśli nie jest dostarczony
+            KEYGEN = KeyGen(size)
+            KEYGEN.Keys_gen()
+            self.public_keys_info = KEYGEN.public_key
+            self.private_keys_info = KEYGEN.private_key
+        else:
+            # Ustawienie klucza, jeśli jest dostarczony
+            self.public_keys_info = None  # Tutaj ustal, jak uzyskać informacje o kluczu publicznym
+            self.private_keys_info = key
         self.filepath = filepath
-
         with open(filepath, 'rb') as file:
             self.file_data = file.read()
 
@@ -184,181 +188,83 @@ class RSA:
         # Krypto blok musi być takiej samej długości co klucz
         self.crypto_block_bytes_size = size // 8
 
-    def ECB_encrypt(self, data):
+    def get_private_keys_info(self):
+        return self.private_keys_info
 
-        # data = data[1:]#pierwszy bajt to filtracja
+    def ECB_encrypt(self, data):
         crypto_idat = []
         crypto_idat_len = []
         crypto_to_view = []
-        # decompress_idat = zlib.decompress(self.Idat)
-        # data = zlib.compress(data)
-        # Czy zdekompresowane czy nie
+        added_zeros = []
         self.length_of_original_idat = len(data)
 
-        # print("Orginal DATA:", data)
-        # print("Orginal DATA DECopmress:", data)
-        # print("length_of_original_idat:",self.length_of_original_idat)
-        # print("block_bytes_size:", self.block_bytes_size)
-        ##print("crypto_block_bytes_size",self.crypto_block_bytes_size)
-
         for i in range(0, self.length_of_original_idat, self.block_bytes_size):
-            # print("PRZED SZYFR: ", data[i:i + self.block_bytes_size])
             raw_block = bytes(data[i:i + self.block_bytes_size])
 
-            # Liczba^e mod n
             encryption = pow(int.from_bytes(raw_block, 'big'), self.public_keys_info[0], self.public_keys_info[1])
-            #print(" IV POW " + str(encryption))
             encryption_bytes = encryption.to_bytes(self.crypto_block_bytes_size, 'big')
-            # print("encryption_bytes:",encryption_bytes)
-            # osatni ne przechowuje informacji tylko jest zgodny z kluczem
-            # crypto_idat.append(encryption_bytes[:-1])
-            # crypto_junk.append(encryption_bytes[-1])
 
             crypto_idat.append(encryption_bytes)
             crypto_to_view.append(encryption_bytes[:-1])
 
             crypto_idat_len.extend(encryption_bytes)
-        # print("crypto_idat:",crypto_idat)
-        # print("Cripto len",len(crypto_idat_len))
+
+            added_zeros.append(encryption_bytes[-1:])
+
         crypto_idat = b''.join(crypto_idat)
         crypto_to_view = b''.join(crypto_to_view)
+        added_zeros = b''.join(added_zeros)
 
-        return crypto_idat, crypto_to_view
+        # print("ECB IDAT" + str(crypto_idat))
+        # print("ECB View" + str(crypto_to_view))
+        # print("ECB ZEROS" + str(added_zeros))
+        print("ECB LEN IDAT" + str(len(crypto_idat)))
+        print("ECB LEN View" + str(len(crypto_to_view)))
+        print("ECB LEN ZEROS" + str(len(added_zeros)))
 
+        return crypto_idat, crypto_to_view, added_zeros
         # Szyfrujemy licznik dodajemy do niego sól na poczatku a pożniej wykonujemy operacje XOR plaintexta z licznikiem
         # plaintekst moze miec ta sama dlugosc co klucz
-
-    def CTR_encrypt(self, data):
-        self.salt = random.getrandbits(self.size // 2)
-        print('salt: ' + str(self.salt))
-        self.salt_bytes = self.salt.to_bytes((self.size // 2 + 7) // 8, byteorder='big')
-
-        self.length_of_original_idat = len(data)
-
-        crypto_idat = []
-        crypto_idat_len = []
-
-        counter = 0
-
-        for i in range(0, self.length_of_original_idat, self.crypto_block_bytes_size):
-            counter_bytes = counter.to_bytes((self.size // 2 + 7) // 8, byteorder='big')
-            IV = self.salt_bytes + counter_bytes
-           # print("IV " + str(IV))
-           # print("IV " + str(len(IV)))
-
-            plaintext_block = bytes(data[i:i + self.crypto_block_bytes_size])
-
-            encryption = pow(int.from_bytes(IV, 'big'), self.public_keys_info[0], self.public_keys_info[1])
-
-            ciphertext_block = int.from_bytes(plaintext_block, 'big') ^ encryption
-
-
-            encryption_bytes = ciphertext_block.to_bytes(self.crypto_block_bytes_size, 'big')
-            #print("ciphertext" + str(encryption_bytes))
-           # print("cipher ken " + str(len(encryption_bytes)))
-            crypto_idat.append(encryption_bytes)
-            crypto_idat_len.extend(encryption_bytes)
-
-
-            counter += 1
-
-           # print(len(crypto_idat))
-
-
-            if len(crypto_idat_len) + self.crypto_block_bytes_size >= self.length_of_original_idat:
-                    print("Cryptographic")
-                    print(len(crypto_idat_len))
-                    print(self.length_of_original_idat)
-                    print(self.crypto_block_bytes_size)
-            #crypto_idat_len.extend(encryption_bytes)
-
-        crypto_idat = b''.join(crypto_idat)
-        #print(len(crypto_idat))
-        # Dodajemy asercję sprawdzającą rozmiar bloku
-        #assert len(crypto_idat) == self.length_of_original_idat, "Encrypted data length mismatch"
-
-        return crypto_idat
-
-    def CTR_decrypt(self, data):
-
-        # data to zakryptowane w bajtach
-        decrypto_idat = []
-        decrypto_bytes = []
-        #print('salt: ' + str(self.salt))
-        counter = 0
-
-        length_of_crypto_idat = len(data)
-       # print("Crypto Data " + str(length_of_crypto_idat))
-       # print('Orginal: ' + str(self.length_of_original_idat))
-       # print('crypto block : ' + str(self.crypto_block_bytes_size))
-
-        for i in range(0, length_of_crypto_idat, self.crypto_block_bytes_size):
-            counter_bytes = counter.to_bytes((self.size // 2 + 7) // 8, byteorder='big')
-            IV = self.salt_bytes + counter_bytes
-            #print("IV " + str(IV))
-            #print("IV " + str(len(IV)))
-            ciphertext_block = bytes(data[i:i + self.crypto_block_bytes_size])
-            #print("ciphertext" + str(ciphertext_block))
-           # print("cipher ken " + str(len(ciphertext_block)))
-
-            #decryption = pow(int.from_bytes(IV, 'big'), self.private_keys_info[0], self.private_keys_info[1])
-            decryption = pow(int.from_bytes(IV, 'big'), self.public_keys_info[0], self.public_keys_info[1])
-
-            plaintex_block = int.from_bytes(ciphertext_block, 'big') ^ decryption
-            #plaintex_block = decryption ^ int.from_bytes(ciphertext_block, 'big')
-
-            if len(decrypto_bytes) + self.crypto_block_bytes_size >= self.length_of_original_idat:
-                print("NIEDOBOR :",self.length_of_original_idat-len(decrypto_bytes))
-                dencryption_bytes = plaintex_block.to_bytes(self.length_of_original_idat - len(decrypto_bytes), 'big')
-
-            else:
-
-                dencryption_bytes = plaintex_block.to_bytes(self.crypto_block_bytes_size, 'big')
-
-
-            #print('decrypto block petla : ' + str(len(dencryption_bytes)))
-           # print('decrypto block  : ' + str(dencryption_bytes))
-            decrypto_bytes.extend(dencryption_bytes)
-            #print("dec ext" + str(decrypto_bytes))
-            decrypto_idat.append(dencryption_bytes)
-
-            counter += 1
-
-        decrypto_idat = b''.join(decrypto_idat)
-
-
-
-        return decrypto_idat
 
     def ECB_decrypt(self, data):
 
         decrypto_idat = []
         decrypto_bytes = []
-        # print("crypto_block_bytes_size:", self.crypto_block_bytes_size)
+        print("key " + str(len(self.private_keys_info)))
+        print("key " + str(self.private_keys_info))
+        print("crypto_block_bytes_size:", self.crypto_block_bytes_size)
         # data = b''.join(data)
         length_of_crypto_idat = len(data)
-        # print("length_of_crypto_idat:", length_of_crypto_idat)
+        print("length_of_crypto_idat:", length_of_crypto_idat)
+        print("length_of_crypto_idat:", self.block_bytes_size)
         # print("DATA:", data)
+        # self.length_of_original_idat = len(data)
+
+        print("Orginal  Decrypt", self.length_of_original_idat)
         for i in range(0, length_of_crypto_idat, self.crypto_block_bytes_size):
 
             raw_block = bytes(data[i:i + self.crypto_block_bytes_size])
             # raw_block = b''.join(data[i:i + self.crypto_block_bytes_size])
-            # print("RAW",raw_block,"LEN", len(raw_block))
+            print("RAW",raw_block,"LEN", len(raw_block))
 
             decryption = pow(int.from_bytes(raw_block, 'big'), self.private_keys_info[0], self.private_keys_info[1])
-
+            # print("EHH " + str(decryption))
             # decryption_bytes = decryption.to_bytes(self.block_bytes_size, 'big')
             # print("LEN DECRIpts",len(decrypto_bytes))
             # print("LEN ORGINAL ",self.length_of_original_idat)
             if len(decrypto_bytes) + self.block_bytes_size >= self.length_of_original_idat:
-                # print("NIEDOBOR :",self.length_of_original_idat-len(decrypto_bytes))
+
+                print("NIEDOBOR :", self.length_of_original_idat - len(decrypto_bytes))
+                # print("Problem " + str(decryption.to_bytes(self.length_of_original_idat - len(decrypto_bytes), 'big')))
                 decryption_bytes = decryption.to_bytes(self.length_of_original_idat - len(decrypto_bytes), 'big')
+                print("DECRYPTO BYTES ", decryption_bytes)
 
             else:
+                # print("Block " + str(self.block_bytes_size))
                 decryption_bytes = decryption.to_bytes(self.block_bytes_size, 'big')
 
             decrypto_bytes.extend(decryption_bytes)
-            #print("I:", i)
+            # print("I:", i)
             decrypto_idat.append(decryption_bytes)
 
         decrypto_idat = b''.join(decrypto_idat)
@@ -377,48 +283,221 @@ class RSA:
 
         return encryptor.update(data)
 
-    def Save_Png_Idat_lenght(self, data_to_view):
+    def Save_Png_Idat_lenght(self, data_to_view, added_mis_block):
         print("data_to_view", len(data_to_view))
-        print("Orginal ",self.length_of_original_idat)
-       # print("data_to_view", data_to_view)
+        print("Orginal ", self.length_of_original_idat)
+        print("data_to_view", data_to_view)
 
         idat = []
-
+        missing_idat = []
         for i in range(self.length_of_original_idat):
 
-            idat.append(data_to_view[i])
-
-        return idat
+                idat.append(data_to_view[i])
 
 
+        missing_idat = data_to_view[self.length_of_original_idat:]
+        missing_idat += b"SE"
+        missing_idat += added_mis_block[0:]
+        # print(missing_idat)
+        print("len of missing ", len(missing_idat))
+
+        idat_bytes = bytes(idat)
+        print("len of idat ", len(idat_bytes))
+        # print(idat_bytes)
+        return idat_bytes, missing_idat
+
+    def read_data_after_iend(self):
+        self.length_of_original_idat = len(self.recon)
+        print("Original LEN POWINNO BYC  " + str(len(self.recon)))
+        IEND_SIGNATURE = b'\x49\x45\x4E\x44\xAE\x42\x60\x82'
+
+        with open(self.filepath, 'rb') as file:
+            data = file.read()
+
+        iend_pos = data.find(IEND_SIGNATURE)
+        if iend_pos == -1:
+            print("Blok IEND nie znaleziony w pliku")
+            return None
 
 
-file_path = r"C:\Users\PRO\PycharmProjects\emedia-png\pngs\dice.png"
-file_crypto = r"C:\Users\PRO\PycharmProjects\emedia-png\crypto.png"
-rsa = RSA(256, file_path)
-data = rsa.Idat
-recon = rsa.recon
-
-key_lib = RSAA.construct(rsa.public_keys_info,rsa.private_keys_info)
-
-plt.clf()
-byte_per_pix = calculate_bytes_per_pixel(rsa.metadata)
-if byte_per_pix == 1:
-    byte_per_pix = 3
-print("Byte per pixel ",byte_per_pix)
-print("colour type", rsa.metadata['IHDR']['color_type'])
-print("Bit depth", rsa.metadata['IHDR']['bit_depth'])
+        data_after_iend = data[iend_pos + len(IEND_SIGNATURE):]
 
 
-png_write = png.Writer(rsa.metadata['IHDR']['width'], rsa.metadata['IHDR']['height'], greyscale=False,alpha = True )
 
-bytes_row_width = rsa.metadata['IHDR']['width'] * byte_per_pix
-#pixels_grouped_by_rows = [recon[i: i + bytes_row_width] for i in range(0, len(recon), bytes_row_width)]
-#f = open(file_crypto, 'wb')
-#png_write.write(f, pixels_grouped_by_rows)
-#f.close()
+        reconstructed_data = []
+        data_after_separator = []
+        final = []
 
 
+        iend_index = 0
+
+
+
+        found_separator = False
+        for i, byte in enumerate(data_after_iend):
+            if not found_separator:
+                if byte == 83 and i < len(data_after_iend) - 1 and data_after_iend[i + 1] == 69:
+                    data_after_separator.append(byte)
+                    data_after_separator.append(69)
+                    found_separator = True
+                    print("witam")
+                else:
+                    print("cie")
+                    reconstructed_data.append(byte)
+            else:
+                data_after_separator.append(byte)
+
+        data_after_separator=bytes(data_after_separator)
+        print(bytes(data_after_separator[0:2]))
+        data_after_separator = data_after_separator[3:]
+        print(bytes(data_after_separator[0:2]))
+
+        print("data_after_iend  ", bytes(data_after_iend))
+        print("reconstructed_data  ", bytes(reconstructed_data))
+        print("separator " ,data_after_separator)
+
+        iend_length = len(data_after_separator)
+
+        self.recon += reconstructed_data
+
+
+        for i in range(0, len(self.recon), self.block_bytes_size):
+            # Get the next block of IDAT data
+            block = self.recon[i:i + self.block_bytes_size]
+            final.extend(block)
+
+
+            if iend_index < iend_length:
+
+                final.append(data_after_separator[iend_index])
+                iend_index += 1
+
+
+        if iend_index < iend_length:
+
+            final.extend(data_after_separator[iend_index:])
+
+
+        self.reconstructed_data = bytes(final)
+
+
+
+        return self.reconstructed_data
+
+
+
+    def CTR_encrypt(self, data):
+        self.salt = random.getrandbits(self.size // 2)
+        print('salt: ' + str(self.salt))
+        self.salt_bytes = self.salt.to_bytes((self.size // 2 + 7) // 8, byteorder='big')
+
+        self.length_of_original_idat = len(data)
+
+        crypto_idat = []
+        crypto_idat_len = []
+
+        counter = 0
+
+        for i in range(0, self.length_of_original_idat, self.crypto_block_bytes_size):
+            counter_bytes = counter.to_bytes((self.size // 2 + 7) // 8, byteorder='big')
+            IV = self.salt_bytes + counter_bytes
+            # print("IV " + str(IV))
+            # print("IV " + str(len(IV)))
+
+            plaintext_block = bytes(data[i:i + self.crypto_block_bytes_size])
+
+            encryption = pow(int.from_bytes(IV, 'big'), self.public_keys_info[0], self.public_keys_info[1])
+
+            ciphertext_block = int.from_bytes(plaintext_block, 'big') ^ encryption
+
+            encryption_bytes = ciphertext_block.to_bytes(self.crypto_block_bytes_size, 'big')
+            # print("ciphertext" + str(encryption_bytes))
+            # print("cipher ken " + str(len(encryption_bytes)))
+            crypto_idat.append(encryption_bytes)
+            crypto_idat_len.extend(encryption_bytes)
+
+            counter += 1
+
+            # print(len(crypto_idat))
+
+            if len(crypto_idat_len) + self.crypto_block_bytes_size >= self.length_of_original_idat:
+                print("Cryptographic")
+                print(len(crypto_idat_len))
+                print(self.length_of_original_idat)
+                print(self.crypto_block_bytes_size)
+            # crypto_idat_len.extend(encryption_bytes)
+
+        crypto_idat = b''.join(crypto_idat)
+        # print(len(crypto_idat))
+        # Dodajemy asercję sprawdzającą rozmiar bloku
+        # assert len(crypto_idat) == self.length_of_original_idat, "Encrypted data length mismatch"
+
+        return crypto_idat
+
+    def CTR_decrypt(self, data):
+
+        # data to zakryptowane w bajtach
+        decrypto_idat = []
+        decrypto_bytes = []
+        # print('salt: ' + str(self.salt))
+        counter = 0
+
+        length_of_crypto_idat = len(data)
+        # print("Crypto Data " + str(length_of_crypto_idat))
+        # print('Orginal: ' + str(self.length_of_original_idat))
+        # print('crypto block : ' + str(self.crypto_block_bytes_size))
+
+        for i in range(0, length_of_crypto_idat, self.crypto_block_bytes_size):
+            counter_bytes = counter.to_bytes((self.size // 2 + 7) // 8, byteorder='big')
+            IV = self.salt_bytes + counter_bytes
+            # print("IV " + str(IV))
+            # print("IV " + str(len(IV)))
+            ciphertext_block = bytes(data[i:i + self.crypto_block_bytes_size])
+            # print("ciphertext" + str(ciphertext_block))
+            # print("cipher ken " + str(len(ciphertext_block)))
+
+            # decryption = pow(int.from_bytes(IV, 'big'), self.private_keys_info[0], self.private_keys_info[1])
+            decryption = pow(int.from_bytes(IV, 'big'), self.public_keys_info[0], self.public_keys_info[1])
+
+            plaintex_block = int.from_bytes(ciphertext_block, 'big') ^ decryption
+            # plaintex_block = decryption ^ int.from_bytes(ciphertext_block, 'big')
+
+            if len(decrypto_bytes) + self.crypto_block_bytes_size >= self.length_of_original_idat:
+                print("NIEDOBOR :", self.length_of_original_idat - len(decrypto_bytes))
+                dencryption_bytes = plaintex_block.to_bytes(self.length_of_original_idat - len(decrypto_bytes), 'big')
+
+
+            else:
+
+                dencryption_bytes = plaintex_block.to_bytes(self.crypto_block_bytes_size, 'big')
+
+            # print('decrypto block petla : ' + str(len(dencryption_bytes)))
+            # print('decrypto block  : ' + str(dencryption_bytes))
+            decrypto_bytes.extend(dencryption_bytes)
+            # print("dec ext" + str(decrypto_bytes))
+            decrypto_idat.append(dencryption_bytes)
+
+            counter += 1
+
+        decrypto_idat = b''.join(decrypto_idat)
+
+        return decrypto_idat
+
+#------------File Path-------------------
+#file_path = r"C:\Users\PRO\PycharmProjects\emedia-png\pngs\basn6a08.png"
+#file_crypto = r"C:\Users\PRO\PycharmProjects\emedia-png\cryptop.png"
+#file_crypto_decrypt = r"C:\Users\PRO\PycharmProjects\emedia-png\crypto2.png"
+# file_path = r"C:\Users\Jakub\Desktop\EMEDIA\emedia-png\pngs\2x2.png"
+# file_crypto = r"C:\Users\Jakub\Desktop\EMEDIA\emedia-png\pngs\crypto.png"
+
+# key_lib = RSAA.construct(rsa.public_keys_info,rsa.private_keys_info)
+#----------------------------------------
+
+
+
+
+
+#----------Test CTR------------
 # tekst = "SiemaEniuDobryZa1616161616161616"
 # tekst = bytes(tekst, 'utf-8')
 
@@ -436,66 +515,25 @@ bytes_row_width = rsa.metadata['IHDR']['width'] * byte_per_pix
 
 # CE = rsa.CTR_decrypt(C)
 # print(CE)
-
-recon = bytes(recon)
-#print("IDAT " + str(data) + "size " + str(len(data)))
-#print("No compress " + str(recon) + "size " + str(len(recon)))
+#---------------------------------
 
 
 
-siz = (rsa.metadata['IHDR']['width'], rsa.metadata['IHDR']['height'])
-
-image = Image.frombytes('RGBA',siz, recon)
-plt.imshow(image)
-plt.show()
-
-
-
-
-
-
-
-encodedata, enc_to_view = rsa.ECB_encrypt(recon)
-#print(enc_to_view)
-
-imageECB = Image.frombytes('RGBA', siz, enc_to_view)
-plt.imshow(imageECB)
-plt.show()
-plt.clf()
-# idata = rsa.Save_Png_Idat_lenght(enc_to_view)
-# pixels_grouped_by_rows = [idata[i: i + bytes_row_width] for i in range(0, len(idata), bytes_row_width)]
-# f = open(file_crypto, 'wb')
-# png_write.write(f, pixels_grouped_by_rows)
-#
-# f.close()
-# idata = rsa.Save_Png_Idat_lenght(enc_to_view)
-# pixels_grouped_by_rows = [idata[i: i + bytes_row_width] for i in range(0, len(idata), bytes_row_width)]
-# f = open(file_crypto, 'wb')
-# png_write.write(f, pixels_grouped_by_rows)
-#
-# f.close()
 
 
 #
-# decodedata = rsa.ECB_decrypt(encodedata)
-# decrypted_image = Image.frombytes('RGB', siz, decodedata)
-# plt.imshow(decrypted_image)
+# -------------------CTR--------------------------
+# CTR = rsa.CTR_encrypt(recon)
+# imageCTR = Image.frombytes('RGB',siz, CTR)
+# plt.imshow(imageCTR)
 # plt.show()
+# idata = rsa.Save_Png_Idat_lenght(CTR)
+# pixels_grouped_by_rows = [idata[i: i + bytes_row_width] for i in range(0, len(idata), bytes_row_width)]
+# f = open(file_crypto, 'wb')
+# png_write.write(f, pixels_grouped_by_rows)
 
-#print("Decode ECB ",decodedata)
-#
-# #
-CTR = rsa.CTR_encrypt(recon)
-imageCTR = Image.frombytes('RGB',siz, CTR)
-plt.imshow(imageCTR)
-plt.show()
-idata = rsa.Save_Png_Idat_lenght(CTR)
-pixels_grouped_by_rows = [idata[i: i + bytes_row_width] for i in range(0, len(idata), bytes_row_width)]
-f = open(file_crypto, 'wb')
-png_write.write(f, pixels_grouped_by_rows)
-
-f.close()
-plt.clf()
+# f.close()
+# plt.clf()
 # idata = rsa.Save_Png_Idat_lenght(CTR)
 # pixels_grouped_by_rows = [idata[i: i + bytes_row_width] for i in range(0, len(idata), bytes_row_width)]
 # f = open(file_crypto, 'wb')
@@ -518,12 +556,73 @@ plt.clf()
 # image = Image.frombytes('RGBA', siz, encode_lib)
 # plt.imshow(image)
 # plt.show()
-#
-#
+# ------------------------------------------
 
-#
-#
+
+
+
+#-----------Test ECB--------------------------
+file_path = r"C:\Users\PRO\PycharmProjects\emedia-png\pngs\basn6a08.png"
+file_crypto = r"C:\Users\PRO\PycharmProjects\emedia-png\cryptop.png"
+file_crypto_decrypt = r"C:\Users\PRO\PycharmProjects\emedia-png\crypto2.png"
+# file_path = r"C:\Users\Jakub\Desktop\EMEDIA\emedia-png\pngs\2x2.png"
+# file_crypto = r"C:\Users\Jakub\Desktop\EMEDIA\emedia-png\pngs\crypto.png"
+
+rsa = RSA(256, file_path)
+recon = rsa.recon
+
+
+byte_per_pix = calculate_bytes_per_pixel(rsa.metadata)
+if byte_per_pix == 1:
+    byte_per_pix = 3
+print("Byte per pixel ", byte_per_pix)
+print("colour type", rsa.metadata['IHDR']['color_type'])
+print("Bit depth", rsa.metadata['IHDR']['bit_depth'])
+
+png_write = png.Writer(rsa.metadata['IHDR']['width'], rsa.metadata['IHDR']['height'], greyscale=False, alpha=True)
+
+bytes_row_width = rsa.metadata['IHDR']['width'] * byte_per_pix
+
+plt.clf()
+
+recon = bytes(recon)
+siz = (rsa.metadata['IHDR']['width'], rsa.metadata['IHDR']['height'])
+encodedata, enc_to_view, zeros = rsa.ECB_encrypt(recon)
+
+imageECB = Image.frombytes('RGBA', siz, enc_to_view)
+plt.imshow(imageECB)
+plt.title("Encrypted Image")
+plt.show()
+
+idata, missing_idat = rsa.Save_Png_Idat_lenght(enc_to_view, zeros)
+
+pixels_grouped_by_rows = [idata[i: i + bytes_row_width] for i in range(0, len(idata), bytes_row_width)]
+f = open(file_crypto, 'wb')
+png_write.write(f, pixels_grouped_by_rows)
+f.write(missing_idat)
+
+f.close()
+
+
+decodedata = rsa.ECB_decrypt(encodedata)
+
+decrypted_image = Image.frombytes('RGBA', siz, decodedata)
+plt.imshow(decrypted_image)
+plt.title("Decrypted Image")
+plt.show()
+print(" ")
+#key = (32995941556654902429246324207303379571, 188728535301618933720544776724056167321)
+decrypt = RSA(256, file_crypto, rsa.get_private_keys_info())
+
+decodedata_to_decrytp = decrypt.read_data_after_iend()
+
+# print("DO DECODE " + str(decodedata_to_decrytp))
+decodedata1 = decrypt.ECB_decrypt(decodedata_to_decrytp)
+siz = (decrypt.metadata['IHDR']['width'], decrypt.metadata['IHDR']['height'])
 # decodedata = rsa.ECB_decrypt(encodedata)
-# decrypted_image = Image.frombytes('RGBA', siz, decodedata)
-# plt.imshow(decrypted_image)
-# plt.show()
+decrypted_image1 = Image.frombytes('RGBA', siz, decodedata1)
+plt.clf()
+plt.imshow(decrypted_image1)
+plt.title("Decrypted Image from File")
+plt.show()
+#----------------------------------------
