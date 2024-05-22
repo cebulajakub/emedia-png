@@ -564,7 +564,7 @@ class RSA:
 #-----------Test ECB--------------------------
 file_path = r"C:\Users\PRO\PycharmProjects\emedia-png\pngs\basn6a08.png"
 file_crypto = r"C:\Users\PRO\PycharmProjects\emedia-png\cryptop.png"
-file_crypto_decrypt = r"C:\Users\PRO\PycharmProjects\emedia-png\crypto2.png"
+file_crypto_decrypt = r"C:\Users\PRO\PycharmProjects\emedia-png\decrypto.png"
 # file_path = r"C:\Users\Jakub\Desktop\EMEDIA\emedia-png\pngs\2x2.png"
 # file_crypto = r"C:\Users\Jakub\Desktop\EMEDIA\emedia-png\pngs\crypto.png"
 
@@ -614,11 +614,22 @@ print(" ")
 #key = (32995941556654902429246324207303379571, 188728535301618933720544776724056167321)
 decrypt = RSA(256, file_crypto, rsa.get_private_keys_info())
 
+
+png_write_dec = png.Writer(rsa.metadata['IHDR']['width'], rsa.metadata['IHDR']['height'], greyscale=False, alpha=True)
+
+bytes_row_width_dec = rsa.metadata['IHDR']['width'] * byte_per_pix
+
 decodedata_to_decrytp = decrypt.read_data_after_iend()
 
 # print("DO DECODE " + str(decodedata_to_decrytp))
 decodedata1 = decrypt.ECB_decrypt(decodedata_to_decrytp)
-siz = (decrypt.metadata['IHDR']['width'], decrypt.metadata['IHDR']['height'])
+
+pixels_grouped_by_rows = [decodedata1[i: i + bytes_row_width] for i in range(0, len(decodedata1), bytes_row_width)]
+f = open(file_crypto_decrypt, 'wb')
+png_write.write(f, pixels_grouped_by_rows)
+
+f.close()
+
 # decodedata = rsa.ECB_decrypt(encodedata)
 decrypted_image1 = Image.frombytes('RGBA', siz, decodedata1)
 plt.clf()
